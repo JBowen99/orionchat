@@ -17,6 +17,8 @@ interface ChatContextType {
   chats: Chat[];
   setChats: React.Dispatch<React.SetStateAction<Chat[]>>;
   refreshChats: () => Promise<void>;
+  togglePin: (chatId: string) => Promise<void>;
+  deleteChat: (chatId: string) => Promise<void>;
   selectedChatId?: string;
   loading: boolean;
   syncing: boolean; // Add syncing state to show background sync status
@@ -58,6 +60,69 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const togglePin = async (chatId: string) => {
+    try {
+      // Find the chat in current state
+      const chat = chats.find((c) => c.id === chatId);
+      if (!chat) return;
+
+      const newPinnedState = !chat.pinned;
+
+      // Optimistically update local state
+      setChats((prevChats) =>
+        prevChats.map((c) =>
+          c.id === chatId ? { ...c, pinned: newPinnedState } : c
+        )
+      );
+
+      // Update Supabase
+      const { error } = await supabase
+        .from("chats")
+        .update({ pinned: newPinnedState })
+        .eq("id", chatId);
+
+      if (error) {
+        console.error("Error toggling pin:", error);
+        // Revert optimistic update on error
+        setChats((prevChats) =>
+          prevChats.map((c) =>
+            c.id === chatId ? { ...c, pinned: chat.pinned } : c
+          )
+        );
+        return;
+      }
+
+      // Update Dexie cache
+      await db.chats.update(chatId, { pinned: newPinnedState });
+    } catch (error) {
+      console.error("Error toggling pin:", error);
+    }
+  };
+
+  const deleteChat = async (chatId: string) => {
+    try {
+      // Optimistically remove from local state
+      setChats((prevChats) => prevChats.filter((c) => c.id !== chatId));
+
+      // Delete from Supabase
+      const { error } = await supabase.from("chats").delete().eq("id", chatId);
+
+      if (error) {
+        console.error("Error deleting chat:", error);
+        // Revert optimistic update on error by refreshing
+        await refreshChats();
+        return;
+      }
+
+      // Delete from Dexie cache
+      await db.chats.delete(chatId);
+    } catch (error) {
+      console.error("Error deleting chat:", error);
+      // Revert optimistic update on error by refreshing
+      await refreshChats();
+    }
+  };
+
   useEffect(() => {
     const loadChats = async () => {
       try {
@@ -88,6 +153,8 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
     chats,
     setChats,
     refreshChats,
+    togglePin,
+    deleteChat,
     selectedChatId,
     loading,
     syncing,

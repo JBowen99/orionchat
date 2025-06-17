@@ -1,17 +1,23 @@
 import { useParams } from "react-router";
 import { useEffect, useRef } from "react";
 import { useChatMessageContext } from "~/contexts/chat-message-context";
+import { useChatContext } from "~/contexts/chat-list-context";
 import { Badge } from "~/components/ui/badge";
 import { Card, CardContent } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
-import { MessageSquare, User, Bot } from "lucide-react";
+import { MessageSquare, User, Bot, AlertTriangle } from "lucide-react";
 import { ChatBubbleUser } from "~/components/chat-bubble-user";
 import { ChatBubbleResponse } from "~/components/chat-bubble-response";
 
 function ChatArea() {
   const { messages, loading, syncing } = useChatMessageContext();
+  const { chats, loading: chatsLoading } = useChatContext();
+  const { chatId } = useParams();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+
+  // Check if chat exists
+  const chatExists = chatId && chats.some((chat) => chat.id === chatId);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -30,11 +36,11 @@ function ChatArea() {
   // Always scroll to bottom on initial load
   useEffect(() => {
     if (!loading && messages.length > 0) {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
     }
   }, [loading, messages.length]);
 
-  if (loading) {
+  if (loading || chatsLoading) {
     return (
       <div className="flex-1 p-6 space-y-4">
         <div className="space-y-4">
@@ -48,6 +54,23 @@ function ChatArea() {
             </div>
           ))}
         </div>
+      </div>
+    );
+  }
+
+  // Show error if chat doesn't exist after loading is complete
+  if (!chatsLoading && !chatExists) {
+    return (
+      <div className="flex-1 flex h-full items-center justify-center">
+        <Card className="max-w-md mx-auto">
+          <CardContent className="p-8 text-center">
+            <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+            <h3 className="text-lg font-medium mb-2">Chat Not Found</h3>
+            <p className="text-muted-foreground">
+              This chat doesn't exist or has been deleted.
+            </p>
+          </CardContent>
+        </Card>
       </div>
     );
   }

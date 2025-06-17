@@ -38,7 +38,7 @@ export default function WelcomeMessage() {
     suggestedMessages.create;
 
   return (
-    <div className="flex-1 flex items-center justify-center">
+    <div className="flex-1 flex items-center justify-center motion-opacity-in-0 motion-duration-[1s]">
       <div className="max-w-lg mx-auto">
         <div className="p-8 text-center">
           <h2 className="text-2xl font-bold mb-3">

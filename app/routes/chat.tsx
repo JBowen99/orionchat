@@ -54,18 +54,22 @@ function ChatContent() {
     <div className="flex flex-col h-screen w-full relative">
       {/* Chat Area */}
       <div ref={chatAreaRef} className="flex-1 overflow-y-scroll">
-        {isHomePage ? <WelcomeMessage /> : <Outlet />}
+        {isHomePage ? (
+          <div className="flex flex-col items-center justify-center h-full">
+            <WelcomeMessage />
+          </div>
+        ) : (
+          <Outlet />
+        )}
       </div>
 
-      {/* Chat Input - only show if we have a chatId */}
-      {chatId && (
-        <div className="absolute bottom-0 w-full flex flex-row justify-center">
-          <ChatInput
-            showScrollButton={showScrollButton}
-            onScrollToBottom={scrollToBottom}
-          />
-        </div>
-      )}
+      {/* Chat Input - always show */}
+      <div className="absolute bottom-0 w-full flex flex-row justify-center">
+        <ChatInput
+          showScrollButton={showScrollButton}
+          onScrollToBottom={scrollToBottom}
+        />
+      </div>
     </div>
   );
 }
@@ -83,13 +87,9 @@ export default function Index() {
         <ChatSidebar />
         <FloatingButtons />
         <SidebarInset>
-          {chatId ? (
-            <ChatMessageProvider chatId={chatId}>
-              <ChatContent />
-            </ChatMessageProvider>
-          ) : (
+          <ChatMessageProvider chatId={chatId}>
             <ChatContent />
-          )}
+          </ChatMessageProvider>
         </SidebarInset>
       </SidebarProvider>
     </div>
