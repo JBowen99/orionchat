@@ -125,6 +125,7 @@ export default function ChatSidebar() {
     return categories;
   }, [filteredChats]);
 
+  /*
   const handleNewChat = async () => {
     setCreatingChat(true);
     try {
@@ -158,6 +159,10 @@ export default function ChatSidebar() {
     } finally {
       setCreatingChat(false);
     }
+  };
+  */
+  const handleNewChat = () => {
+    navigate("/chat");
   };
 
   return (

@@ -1,8 +1,6 @@
 import { useParams } from "react-router";
-import {
-  ChatMessageProvider,
-  useChatMessageContext,
-} from "~/contexts/chat-message-context";
+import { useEffect, useRef } from "react";
+import { useChatMessageContext } from "~/contexts/chat-message-context";
 import { Badge } from "~/components/ui/badge";
 import { Card, CardContent } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
@@ -12,6 +10,29 @@ import { ChatBubbleResponse } from "~/components/chat-bubble-response";
 
 function ChatArea() {
   const { messages, loading, syncing } = useChatMessageContext();
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    // Check if user is near the bottom before auto-scrolling
+    if (chatContainerRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } =
+        chatContainerRef.current;
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+
+      if (isNearBottom) {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      }
+    }
+  }, [messages]);
+
+  // Always scroll to bottom on initial load
+  useEffect(() => {
+    if (!loading && messages.length > 0) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [loading, messages.length]);
 
   if (loading) {
     return (
@@ -48,7 +69,7 @@ function ChatArea() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-6">
+    <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-6 pb-32">
       <div className="space-y-6 max-w-4xl mx-auto">
         {messages.map((message) => (
           <div key={message.id}>
@@ -59,6 +80,13 @@ function ChatArea() {
             )}
           </div>
         ))}
+        {syncing && (
+          <div className="flex justify-center">
+            <div className="text-sm text-muted-foreground">Syncing...</div>
+          </div>
+        )}
+        {/* Invisible element to scroll to */}
+        <div ref={messagesEndRef} />
       </div>
     </div>
   );
@@ -83,11 +111,5 @@ export default function ChatPage() {
     );
   }
 
-  return (
-    <ChatMessageProvider chatId={chatId}>
-      <div className="flex flex-col h-full">
-        <ChatArea />
-      </div>
-    </ChatMessageProvider>
-  );
+  return <ChatArea />;
 }

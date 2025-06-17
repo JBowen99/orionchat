@@ -13,6 +13,7 @@ import {
   XCircle,
   ChevronRight,
   AlertTriangle,
+  Loader2,
 } from "lucide-react";
 import { useState } from "react";
 import type { Tables } from "database.types";
@@ -32,7 +33,7 @@ export function ChatBubbleResponse({
 }: ChatBubbleResponseProps) {
   const [isHovered, setIsHovered] = useState(false);
 
-  // Extract model and error info from metadata
+  // Extract model and streaming info from metadata
   const metadata = message.metadata as {
     model?: string;
     error?: string;
@@ -40,9 +41,13 @@ export function ChatBubbleResponse({
     errorCode?: string;
     timestamp?: string;
     originalError?: string;
+    streaming?: boolean;
+    loading?: boolean;
   } | null;
   const model = metadata?.model || "Claude 3.5 Sonnet";
   const isError = message.type === "error" || !!metadata?.error;
+  const isStreaming = metadata?.streaming === true;
+  const isLoading = metadata?.loading === true;
   const errorMessage = metadata?.error || message.content;
   const errorType = metadata?.errorType;
   const errorCode = metadata?.errorCode;
@@ -141,6 +146,16 @@ export function ChatBubbleResponse({
       );
     }
 
+    // Show loading spinner
+    if (isLoading) {
+      return (
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span className="text-sm">Thinking...</span>
+        </div>
+      );
+    }
+
     if (message.content) {
       return (
         <MarkdownRenderer
@@ -170,51 +185,53 @@ export function ChatBubbleResponse({
           >
             {renderContent()}
           </div>
-          {/* Hover actions row */}
-          <div
-            className={`flex items-center text-muted-foreground gap-2 pt-2  ${
-              isHovered ? "opacity-100" : "opacity-0"
-            } transition-all duration-200`}
-          >
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0"
-              onClick={handleCopy}
-              title="Copy"
+          {/* Hover actions row - don't show during loading or streaming */}
+          {!isStreaming && !isLoading && (
+            <div
+              className={`flex items-center text-muted-foreground gap-2 pt-2  ${
+                isHovered ? "opacity-100" : "opacity-0"
+              } transition-all duration-200`}
             >
-              <Copy className="h-3 w-3" />
-            </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0"
+                onClick={handleCopy}
+                title="Copy"
+              >
+                <Copy className="h-3 w-3" />
+              </Button>
 
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0"
-              onClick={handleEdit}
-              title="Edit"
-            >
-              <Share className="h-3 w-3" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0"
-              onClick={handleRegenerate}
-              title="Regenerate"
-            >
-              <RotateCcw className="h-3 w-3" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0"
-              onClick={handleEdit}
-              title="Edit"
-            >
-              <Split className="h-3 w-3 rotate-180" />
-            </Button>
-            <span className="text-xs">{isError ? "Error" : model}</span>
-          </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0"
+                onClick={handleEdit}
+                title="Edit"
+              >
+                <Share className="h-3 w-3" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0"
+                onClick={handleRegenerate}
+                title="Regenerate"
+              >
+                <RotateCcw className="h-3 w-3" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0"
+                onClick={handleEdit}
+                title="Edit"
+              >
+                <Split className="h-3 w-3 rotate-180" />
+              </Button>
+              <span className="text-xs">{isError ? "Error" : model}</span>
+            </div>
+          )}
         </div>
       </div>
     </div>

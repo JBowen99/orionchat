@@ -1,9 +1,10 @@
-import { Outlet, useLocation } from "react-router";
+import { Outlet, useLocation, useParams } from "react-router";
 import ChatInput from "~/components/chat-input";
 import ChatSidebar from "~/components/chat-sidebar";
 import FloatingButtons from "~/components/floating-buttons";
 import { SidebarProvider, SidebarInset } from "~/components/ui/sidebar";
 import { ChatProvider } from "~/contexts/chat-list-context";
+import { ChatMessageProvider } from "~/contexts/chat-message-context";
 import { Card, CardContent } from "~/components/ui/card";
 import { useState } from "react";
 import { useRef } from "react";
@@ -12,26 +13,69 @@ import { useUser } from "~/contexts/user-context";
 import { Button } from "~/components/ui/button";
 import WelcomeMessage from "~/components/welcome-message";
 
-export default function Index() {
+function ChatContent() {
   const location = useLocation();
   const isHomePage = location.pathname === "/chat" || location.pathname === "/";
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  const chatAreaRef = useRef<HTMLDivElement>(null);
 
-  const inputRef = useRef<HTMLDivElement>(null);
-  const [inputHeight, setInputHeight] = useState(0);
+  // Extract chatId from the current path
+  const pathParts = location.pathname.split("/");
+  const chatId = pathParts.length > 2 ? pathParts[2] : null;
 
+  // Handle scroll detection
   useEffect(() => {
-    const updateHeight = () => {
-      if (inputRef.current) {
-        setInputHeight(inputRef.current.offsetHeight);
-      }
+    const chatArea = chatAreaRef.current;
+    if (!chatArea) return;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = chatArea;
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 100;
+      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+      const hasScrolledUpFromBottom = distanceFromBottom > clientHeight; // Full screen height from bottom
+
+      setShowScrollButton(!isAtBottom && hasScrolledUpFromBottom);
     };
 
-    updateHeight();
-    const observer = new ResizeObserver(updateHeight);
-    if (inputRef.current) observer.observe(inputRef.current);
-
-    return () => observer.disconnect();
+    chatArea.addEventListener("scroll", handleScroll);
+    return () => chatArea.removeEventListener("scroll", handleScroll);
   }, []);
+
+  const scrollToBottom = () => {
+    if (chatAreaRef.current) {
+      chatAreaRef.current.scrollTo({
+        top: chatAreaRef.current.scrollHeight,
+        behavior: "smooth",
+      });
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-screen w-full relative">
+      {/* Chat Area */}
+      <div ref={chatAreaRef} className="flex-1 overflow-y-scroll">
+        {isHomePage ? <WelcomeMessage /> : <Outlet />}
+      </div>
+
+      {/* Chat Input - only show if we have a chatId */}
+      {chatId && (
+        <div className="absolute bottom-0 w-full flex flex-row justify-center">
+          <ChatInput
+            showScrollButton={showScrollButton}
+            onScrollToBottom={scrollToBottom}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function Index() {
+  const location = useLocation();
+
+  // Extract chatId from the current path
+  const pathParts = location.pathname.split("/");
+  const chatId = pathParts.length > 2 ? pathParts[2] : null;
 
   return (
     <div className="flex flex-col items-center justify-center h-screen">
@@ -39,18 +83,13 @@ export default function Index() {
         <ChatSidebar />
         <FloatingButtons />
         <SidebarInset>
-          <div className="flex flex-col h-screen w-full relative">
-            {/* Chat Area */}
-            {isHomePage ? <WelcomeMessage /> : <Outlet />}
-
-            <div
-              ref={inputRef}
-              className="absolute bottom-0 left-0 right-0 flex flex-row items-center justify-center"
-            >
-              {/* Chat Input */}
-              <ChatInput />
-            </div>
-          </div>
+          {chatId ? (
+            <ChatMessageProvider chatId={chatId}>
+              <ChatContent />
+            </ChatMessageProvider>
+          ) : (
+            <ChatContent />
+          )}
         </SidebarInset>
       </SidebarProvider>
     </div>
