@@ -2,6 +2,7 @@ import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import { ArrowUp, Globe, Paperclip, SendIcon } from "lucide-react";
 import { Textarea } from "./ui/textarea";
+import ModelSelector from "./model-selector";
 export default function ChatInput() {
   return (
     <div className="chat-input-area flex flex-col items-center pt-2 px-2 justify-center w-1/2 rounded-t-xl">
@@ -10,11 +11,11 @@ export default function ChatInput() {
           <Textarea className="scrollbar-hide resize-none min-h-[1rem] max-h-52 py-2 px-3 text-sm md:text-base focus:ring-0 focus:outline-none focus-visible:ring-0 focus-visible:border-border" />
         </div>
         <div className="flex flex-row items-center justify-start w-full gap-2">
-          Model Select
-          <Button variant="ghost" className="w-7 h-7">
+          <ModelSelector />
+          <Button variant="ghost" className="w-7 h-7 text-muted-foreground">
             <Globe />
           </Button>
-          <Button variant="ghost" className="w-7 h-7">
+          <Button variant="ghost" className="w-7 h-7 text-muted-foreground">
             <Paperclip />
           </Button>
           <Button

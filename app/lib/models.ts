@@ -601,4 +601,54 @@ export function getGoogleModelName(modelId: string): string {
   };
   
   return modelMap[modelId] || "gemini-1.5-flash";
+}
+
+// Get all available providers that have models defined
+export function getAvailableProviders(): Array<{
+  value: string;
+  label: string;
+  description: string;
+  modelCount: number;
+}> {
+  // Get unique providers from ALL_MODELS
+  const providerCounts = ALL_MODELS.reduce((acc, model) => {
+    acc[model.provider] = (acc[model.provider] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const providerNames: Record<string, { label: string; description: string }> = {
+    openai: {
+      label: "OpenAI",
+      description: "GPT-4, GPT-3.5, and other OpenAI models",
+    },
+    anthropic: {
+      label: "Anthropic", 
+      description: "Claude models for advanced reasoning",
+    },
+    google: {
+      label: "Google AI",
+      description: "Gemini models for multimodal AI",
+    },
+    mistral: {
+      label: "Mistral AI",
+      description: "Open and commercial Mistral models",
+    },
+    deepseek: {
+      label: "DeepSeek",
+      description: "DeepSeek Chat and Reasoner models",
+    },
+    custom: {
+      label: "Custom Provider",
+      description: "Custom API endpoints and models",
+    },
+  };
+
+  return Object.entries(providerCounts)
+    .map(([provider, count]) => ({
+      value: provider,
+      label: providerNames[provider]?.label || provider,
+      description: providerNames[provider]?.description || `${provider} models`,
+      modelCount: count,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
 } 

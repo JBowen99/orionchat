@@ -7,6 +7,7 @@ import {
   Pin,
   User,
   LogOut,
+  Settings,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import {
@@ -24,7 +25,7 @@ import ChatListItem from "./sidebar/chat-list-item";
 import { ThemeToggle } from "./ui/theme-toggle";
 import { Input } from "./ui/input";
 import { useState, useMemo } from "react";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { createClient } from "~/lib/client";
 import type { Chat } from "~/contexts/chat-list-context";
 
@@ -159,20 +160,11 @@ export default function ChatSidebar() {
     }
   };
 
-  const handleSignOut = async () => {
-    try {
-      await signOut();
-      navigate("/login");
-    } catch (error) {
-      console.error("Error signing out:", error);
-    }
-  };
-
   return (
     <Sidebar>
       <SidebarHeader>
         <div className="flex flex-row items-center justify-between pt-2">
-          <h1 className="text-xl pt-2 font-bold">
+          <Link to="/chat" className="text-xl pt-2 font-bold">
             <img
               src="/fulllogo2.svg"
               alt="logo"
@@ -183,16 +175,23 @@ export default function ChatSidebar() {
               alt="logo"
               className="block dark:hidden h-6"
             />
-          </h1>
-          <div className="flex flex-row items-center gap-2">
-            <Button variant="ghost" className="w-8 h-8">
+          </Link>
+          <div className="flex flex-row items-center justify-center gap-2">
+            <div className="transition-transform duration-200 ease-in-out hover:scale-105">
               <SidebarTrigger />
-            </Button>
-            <Button variant="ghost" className="w-8 h-8">
+            </div>
+            <div className="transition-transform duration-200 ease-in-out hover:scale-105">
               <ThemeToggle />
-            </Button>
-            <Button variant="ghost" className="w-8 h-8">
-              <SettingsIcon />
+            </div>
+            <Button
+              asChild
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 transition-all duration-200 ease-in-out hover:scale-105"
+            >
+              <Link to="/settings">
+                <Settings className="w-4 h-4" />
+              </Link>
             </Button>
           </div>
         </div>
@@ -239,41 +238,36 @@ export default function ChatSidebar() {
         )}
       </SidebarContent>
       <SidebarFooter>
-        {userLoading ? (
-          <div className="flex items-center gap-2 p-2">
-            <div className="w-6 h-6 bg-muted rounded-full animate-pulse" />
-            <div className="w-20 h-4 bg-muted rounded animate-pulse" />
-          </div>
-        ) : user ? (
-          <div className="flex items-center justify-between p-2">
-            <div className="flex items-center gap-2 min-w-0 flex-1">
-              <User className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-              <span className="text-sm truncate">
-                {user.user_metadata?.full_name || user.email}
-              </span>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleSignOut}
-              className="flex-shrink-0 w-8 h-8 p-0"
-              title="Sign out"
-            >
-              <LogOut className="w-4 h-4" />
-            </Button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2 p-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => navigate("/login")}
-              className="w-full"
-            >
-              Sign In
-            </Button>
-          </div>
-        )}
+        <div className="flex flex-col border-t w-full p-2">
+          <Link to="/settings">
+            {userLoading ? (
+              <div className="flex items-center gap-2 p-2">
+                <div className="w-6 h-6 bg-muted rounded-full animate-pulse" />
+                <div className="w-20 h-4 bg-muted rounded animate-pulse" />
+              </div>
+            ) : user ? (
+              <div className="flex items-center justify-between p-2">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <User className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                  <span className="text-sm truncate">
+                    {user.user_metadata?.full_name || user.email}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 p-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate("/login")}
+                  className="w-full"
+                >
+                  Sign In
+                </Button>
+              </div>
+            )}
+          </Link>
+        </div>
       </SidebarFooter>
     </Sidebar>
   );

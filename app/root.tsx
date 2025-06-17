@@ -11,7 +11,10 @@ import type { Route } from "./+types/root";
 import "./app.css";
 import { ThemeProvider } from "./contexts/theme-context";
 import { UserProvider } from "./contexts/user-context";
+import { SettingsProvider } from "./contexts/settings-context";
+import { ApiKeysProvider } from "./contexts/api-keys-context";
 import { Toaster } from "sonner";
+import { ChatProvider } from "./contexts/chat-list-context";
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -47,18 +50,24 @@ export function Layout({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <UserProvider>
-      <ThemeProvider>
-        <Outlet />
-        <Toaster
-          toastOptions={{
-            style: {
-              background: "var(--toast-background)",
-              color: "var(--toast-foreground)",
-              border: "var(--toast-border)",
-            },
-          }}
-        />
-      </ThemeProvider>
+      <SettingsProvider>
+        <ApiKeysProvider>
+          <ThemeProvider>
+            <ChatProvider>
+              <Outlet />
+            </ChatProvider>
+            <Toaster
+              toastOptions={{
+                style: {
+                  background: "var(--toast-background)",
+                  color: "var(--toast-foreground)",
+                  border: "var(--toast-border)",
+                },
+              }}
+            />
+          </ThemeProvider>
+        </ApiKeysProvider>
+      </SettingsProvider>
     </UserProvider>
   );
 }
