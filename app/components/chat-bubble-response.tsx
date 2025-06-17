@@ -6,6 +6,11 @@ import {
   CollapsibleTrigger,
 } from "~/components/ui/collapsible";
 import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "~/components/ui/tooltip";
+import {
   Copy,
   RotateCcw,
   Share,
@@ -19,19 +24,21 @@ import { useState } from "react";
 import type { Tables } from "database.types";
 import { toast } from "sonner";
 import { MarkdownRenderer } from "~/components/markdown-renderer";
+import { useChatMessageContext } from "~/contexts/chat-message-context";
 
 interface ChatBubbleResponseProps {
   message: Tables<"messages">;
-  onRetry?: (parentMessageId: string) => void;
   isGenerating?: boolean;
 }
 
 export function ChatBubbleResponse({
   message,
-  onRetry,
   isGenerating = false,
 }: ChatBubbleResponseProps) {
   const [isHovered, setIsHovered] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
+  const [isBranching, setIsBranching] = useState(false);
+  const { retryResponse, branchConversation } = useChatMessageContext();
 
   // Extract model and streaming info from metadata
   const metadata = message.metadata as {
@@ -70,20 +77,38 @@ export function ChatBubbleResponse({
     }
   };
 
-  const handleRegenerate = () => {
-    // TODO: Implement regenerate functionality
-    console.log("Regenerate message:", message.id);
+  const handleRetry = async () => {
+    if (isRetrying) return;
+
+    setIsRetrying(true);
+    try {
+      await retryResponse(message.id);
+    } catch (error) {
+      console.error("Failed to retry response:", error);
+      toast.error("Failed to retry response. Please try again.");
+    } finally {
+      setIsRetrying(false);
+    }
+  };
+
+  const handleBranch = async () => {
+    if (isBranching) return;
+
+    setIsBranching(true);
+    try {
+      await branchConversation(message.id);
+      toast.success("Conversation branched successfully");
+    } catch (error) {
+      console.error("Failed to branch conversation:", error);
+      toast.error("Failed to branch conversation. Please try again.");
+    } finally {
+      setIsBranching(false);
+    }
   };
 
   const handleEdit = () => {
     // TODO: Implement edit functionality
     console.log("Edit message:", message.id);
-  };
-
-  const handleRetryMessage = () => {
-    if (onRetry && message.parent_message_id) {
-      onRetry(message.parent_message_id);
-    }
   };
 
   const renderContent = () => {
@@ -192,43 +217,80 @@ export function ChatBubbleResponse({
                 isHovered ? "opacity-100" : "opacity-0"
               } transition-all duration-200`}
             >
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 w-7 p-0"
-                onClick={handleCopy}
-                title="Copy"
-              >
-                <Copy className="h-3 w-3" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    onClick={handleCopy}
+                  >
+                    <Copy className="h-3 w-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Copy response</p>
+                </TooltipContent>
+              </Tooltip>
 
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 w-7 p-0"
-                onClick={handleEdit}
-                title="Edit"
-              >
-                <Share className="h-3 w-3" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 w-7 p-0"
-                onClick={handleRegenerate}
-                title="Regenerate"
-              >
-                <RotateCcw className="h-3 w-3" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 w-7 p-0"
-                onClick={handleEdit}
-                title="Edit"
-              >
-                <Split className="h-3 w-3 rotate-180" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    onClick={handleEdit}
+                  >
+                    <Share className="h-3 w-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Share response</p>
+                </TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    onClick={handleRetry}
+                    disabled={isRetrying}
+                  >
+                    {isRetrying ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <RotateCcw className="h-3 w-3" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{isRetrying ? "Retrying..." : "Retry response"}</p>
+                </TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    onClick={handleBranch}
+                    disabled={isBranching}
+                  >
+                    {isBranching ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Split className="h-3 w-3 rotate-180" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{isBranching ? "Branching..." : "Branch conversation"}</p>
+                </TooltipContent>
+              </Tooltip>
+
               <span className="text-xs">{isError ? "Error" : model}</span>
             </div>
           )}

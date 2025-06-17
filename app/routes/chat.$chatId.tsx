@@ -5,9 +5,18 @@ import { useChatContext } from "~/contexts/chat-list-context";
 import { Badge } from "~/components/ui/badge";
 import { Card, CardContent } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
-import { MessageSquare, User, Bot, AlertTriangle } from "lucide-react";
+import {
+  MessageSquare,
+  User,
+  Bot,
+  AlertTriangle,
+  Info,
+  Scroll,
+  BrainCircuit,
+} from "lucide-react";
 import { ChatBubbleUser } from "~/components/chat-bubble-user";
 import { ChatBubbleResponse } from "~/components/chat-bubble-response";
+import { Button } from "~/components/ui/button";
 
 function ChatArea() {
   const { messages, loading, syncing } = useChatMessageContext();
@@ -93,6 +102,11 @@ function ChatArea() {
 
   return (
     <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-6 pb-32">
+      <div className="absolute right-0 top-1/2 -translate-y-1/2 bg-accent p-2 rounded-l-xl">
+        <div className="flex flex-col items-center gap-2">
+          <BrainCircuit size={28} strokeWidth={1} />
+        </div>
+      </div>
       <div className="space-y-6 max-w-4xl mx-auto">
         {messages.map((message) => (
           <div key={message.id}>

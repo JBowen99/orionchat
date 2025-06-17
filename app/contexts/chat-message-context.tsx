@@ -8,6 +8,14 @@ import {
 import { createClient } from "~/lib/client";
 import { db } from "~/dexie/db";
 import type { Tables } from "database.types";
+import { chatService } from "~/services/chat.service";
+import type { ChatMessage } from "~/services/chat.service";
+import { useApiKeys } from "~/contexts/api-keys-context";
+import { getModelById } from "~/lib/models";
+import { v4 as uuidv4 } from "uuid";
+import { useNavigate } from "react-router";
+import { useUser } from "~/contexts/user-context";
+import { useChatContext } from "~/contexts/chat-list-context";
 
 // Use the full Supabase Message type
 export type Message = Tables<"messages">;
@@ -22,6 +30,8 @@ interface ChatMessageContextType {
     updates: Partial<Message>
   ) => Promise<void>;
   deleteMessage: (messageId: string) => Promise<void>;
+  retryResponse: (targetMessageId: string) => Promise<void>;
+  branchConversation: (targetMessageId: string) => Promise<void>;
   chatId: string | null;
   loading: boolean;
   syncing: boolean;
@@ -44,6 +54,10 @@ export const ChatMessageProvider = ({
   const [loading, setLoading] = useState<boolean>(true);
   const [syncing, setSyncing] = useState<boolean>(false);
   const [supabase] = useState(() => createClient());
+  const { apiKeys } = useApiKeys();
+  const navigate = useNavigate();
+  const { user } = useUser();
+  const { refreshChats } = useChatContext();
 
   const refreshMessages = async () => {
     if (!chatId) return;
@@ -170,6 +184,259 @@ export const ChatMessageProvider = ({
     }
   };
 
+  const retryResponse = async (targetMessageId: string) => {
+    if (!chatId) return;
+
+    try {
+      // Find the target message
+      const targetMessage = messages.find((m) => m.id === targetMessageId);
+      if (!targetMessage) {
+        throw new Error("Target message not found");
+      }
+
+      // Extract model from target message metadata
+      const metadata = targetMessage.metadata as {
+        model?: string;
+        temperature?: number;
+        maxTokens?: number;
+      } | null;
+
+      const model = metadata?.model;
+      if (!model) {
+        throw new Error("Cannot retry: No model information found in message");
+      }
+
+      // Get model configuration
+      const modelConfig = getModelById(model);
+      if (!modelConfig) {
+        throw new Error(`Model ${model} not found`);
+      }
+
+      // Check if we have the required API key
+      const apiKeysForService = Object.entries(apiKeys).reduce(
+        (acc, [provider, keyEntry]) => {
+          acc[provider as keyof typeof apiKeys] = keyEntry?.key || null;
+          return acc;
+        },
+        {} as Record<keyof typeof apiKeys, string | null>
+      );
+
+      const requiredApiKey = apiKeysForService[modelConfig.provider];
+      if (!requiredApiKey) {
+        throw new Error(
+          `No API key found for ${modelConfig.provider}. Please add an API key in Settings.`
+        );
+      }
+
+      // Find the target message index
+      const targetIndex = messages.findIndex((m) => m.id === targetMessageId);
+      if (targetIndex === -1) {
+        throw new Error("Target message not found in conversation");
+      }
+
+      // Delete all messages after the target message (including the target)
+      const messagesToDelete = messages.slice(targetIndex);
+
+      // Delete messages in reverse order (newest first) to maintain consistency
+      for (let i = messagesToDelete.length - 1; i >= 0; i--) {
+        const messageToDelete = messagesToDelete[i];
+        await deleteMessage(messageToDelete.id);
+      }
+
+      // Get conversation history up to the parent message
+      const conversationHistory: ChatMessage[] = messages
+        .slice(0, targetIndex)
+        .map((msg) => ({
+          role: msg.role as "system" | "user" | "assistant",
+          content: msg.content || "",
+        }));
+
+      // Find the last user message to retry
+      let lastUserMessage: ChatMessage | null = null;
+      for (let i = conversationHistory.length - 1; i >= 0; i--) {
+        if (conversationHistory[i].role === "user") {
+          lastUserMessage = conversationHistory[i];
+          break;
+        }
+      }
+
+      if (!lastUserMessage) {
+        throw new Error("No user message found to retry");
+      }
+
+      // Create loading message placeholder
+      const assistantMessageId = uuidv4();
+      const loadingMessage: Message = {
+        id: assistantMessageId,
+        chat_id: chatId,
+        role: "assistant",
+        content: "",
+        type: "text",
+        created_at: new Date().toISOString(),
+        parent_message_id: targetMessage.parent_message_id,
+        metadata: { loading: true },
+      };
+
+      // Add loading message
+      await addMessage(loadingMessage);
+
+      // Call the streaming chat service to retry the response
+      const streamingResponse = chatService.generateStreamingChatCompletion(
+        {
+          model: model,
+          messages: [...conversationHistory, lastUserMessage],
+          temperature: metadata?.temperature || 0.7,
+          maxTokens: metadata?.maxTokens || 4096,
+          stream: true,
+        },
+        apiKeysForService
+      );
+
+      let fullContent = "";
+      let finalMetadata = null;
+      let isFirstChunk = true;
+
+      for await (const chunk of streamingResponse) {
+        if (chunk.delta) {
+          fullContent += chunk.delta;
+
+          // On first chunk, remove loading state and start streaming
+          if (isFirstChunk) {
+            await updateMessage(assistantMessageId, {
+              content: fullContent,
+              metadata: { streaming: true, model },
+            });
+            isFirstChunk = false;
+          } else {
+            // Update the message with streaming content
+            await updateMessage(assistantMessageId, {
+              content: fullContent,
+              metadata: { streaming: true, model },
+            });
+          }
+        }
+
+        if (chunk.finished) {
+          finalMetadata = chunk.metadata;
+
+          // Final update to mark streaming as complete
+          await updateMessage(assistantMessageId, {
+            content: chunk.content,
+            metadata: finalMetadata
+              ? { ...JSON.parse(JSON.stringify(finalMetadata)), model }
+              : { model },
+          });
+          break;
+        }
+      }
+    } catch (error) {
+      console.error("Error retrying response:", error);
+
+      // Create error message
+      const errorMessageId = uuidv4();
+      const errorMessage: Message = {
+        id: errorMessageId,
+        chat_id: chatId,
+        role: "assistant",
+        content:
+          error instanceof Error ? error.message : "Failed to retry response",
+        type: "error",
+        created_at: new Date().toISOString(),
+        parent_message_id: null,
+        metadata: {
+          error:
+            error instanceof Error ? error.message : "Failed to retry response",
+          originalError: error instanceof Error ? error.stack : String(error),
+        },
+      };
+
+      await addMessage(errorMessage);
+      throw error;
+    }
+  };
+
+  const branchConversation = async (targetMessageId: string) => {
+    if (!chatId || !user) {
+      throw new Error("Chat ID or user not available");
+    }
+
+    try {
+      // Find the target message index
+      const targetIndex = messages.findIndex((m) => m.id === targetMessageId);
+      if (targetIndex === -1) {
+        throw new Error("Target message not found in conversation");
+      }
+
+      // Get messages up to and including the target message
+      const messagesToCopy = messages.slice(0, targetIndex + 1);
+
+      if (messagesToCopy.length === 0) {
+        throw new Error("No messages to branch from");
+      }
+
+      // Create a new chat title based on the target message or first user message
+      let chatTitle = "New conversation";
+      const firstUserMessage = messagesToCopy.find((m) => m.role === "user");
+      if (firstUserMessage?.content) {
+        chatTitle =
+          firstUserMessage.content.length > 50
+            ? firstUserMessage.content.slice(0, 50) + "..."
+            : firstUserMessage.content;
+      }
+
+      // Create new chat with parent_chat_id set to current chat
+      const { data: newChat, error: chatError } = await supabase
+        .from("chats")
+        .insert({
+          title: chatTitle,
+          user_id: user.id,
+          parent_chat_id: chatId, // Set parent to current chat
+        })
+        .select()
+        .single();
+
+      if (chatError) {
+        console.error("Error creating new chat:", chatError);
+        throw new Error("Failed to create new chat");
+      }
+
+      // Copy messages to the new chat
+      const newMessages: Message[] = messagesToCopy.map((msg, index) => ({
+        ...msg,
+        id: uuidv4(), // Generate new ID
+        chat_id: newChat.id,
+        parent_message_id: index > 0 ? null : null, // Reset parent relationships for simplicity
+        created_at: new Date(Date.now() + index).toISOString(), // Ensure proper ordering
+      }));
+
+      // Insert messages into the new chat
+      const { error: messagesError } = await supabase
+        .from("messages")
+        .insert(newMessages);
+
+      if (messagesError) {
+        console.error("Error copying messages:", messagesError);
+        // Clean up the created chat
+        await supabase.from("chats").delete().eq("id", newChat.id);
+        throw new Error("Failed to copy messages to new chat");
+      }
+
+      // Cache the new messages in Dexie
+      await db.messages.bulkAdd(newMessages);
+
+      // Refresh the chat list to show the new chat in sidebar
+      await refreshChats();
+
+      // Navigate to the new chat
+      navigate(`/chat/${newChat.id}`);
+
+      return newChat.id;
+    } catch (error) {
+      console.error("Error branching conversation:", error);
+      throw error;
+    }
+  };
+
   useEffect(() => {
     const loadMessages = async () => {
       if (!chatId) {
@@ -206,6 +473,8 @@ export const ChatMessageProvider = ({
     addMessage,
     updateMessage,
     deleteMessage,
+    retryResponse,
+    branchConversation,
     chatId,
     loading,
     syncing,

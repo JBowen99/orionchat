@@ -1,8 +1,14 @@
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "~/components/ui/tooltip";
 import { User, Copy, RotateCcw, Edit3 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+
 interface ChatBubbleUserProps {
   message: {
     id: string;
@@ -55,35 +61,53 @@ export function ChatBubbleUser({ message }: ChatBubbleUserProps) {
               isHovered ? "opacity-100" : "opacity-0"
             } transition-all duration-200`}
           >
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0"
-              onClick={handleCopy}
-              title="Copy"
-            >
-              <Copy className="h-3 w-3" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0"
+                  onClick={handleCopy}
+                >
+                  <Copy className="h-3 w-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Copy message</p>
+              </TooltipContent>
+            </Tooltip>
 
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0"
-              onClick={handleRetry}
-              title="Retry"
-            >
-              <RotateCcw className="h-3 w-3" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0"
+                  onClick={handleRetry}
+                >
+                  <RotateCcw className="h-3 w-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Retry from here</p>
+              </TooltipContent>
+            </Tooltip>
 
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0"
-              onClick={handleEdit}
-              title="Edit"
-            >
-              <Edit3 className="h-3 w-3" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0"
+                  onClick={handleEdit}
+                >
+                  <Edit3 className="h-3 w-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Edit message</p>
+              </TooltipContent>
+            </Tooltip>
           </div>
         </div>
       </div>

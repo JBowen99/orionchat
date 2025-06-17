@@ -53,7 +53,10 @@ function ChatContent() {
   return (
     <div className="flex flex-col h-screen w-full relative">
       {/* Chat Area */}
-      <div ref={chatAreaRef} className="flex-1 overflow-y-scroll">
+      <div
+        ref={chatAreaRef}
+        className="flex-1 overflow-y-scroll scrollbar-hide"
+      >
         {isHomePage ? (
           <div className="flex flex-col items-center justify-center h-full">
             <WelcomeMessage />
