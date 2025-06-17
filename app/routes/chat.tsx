@@ -39,10 +39,7 @@ export default function Index() {
         <ChatSidebar />
         <FloatingButtons />
         <SidebarInset>
-          <div
-            className="flex flex-col h-screen w-full relative"
-            style={{ paddingBottom: `${inputHeight}px` }}
-          >
+          <div className="flex flex-col h-screen w-full relative">
             {/* Chat Area */}
             {isHomePage ? <WelcomeMessage /> : <Outlet />}
 

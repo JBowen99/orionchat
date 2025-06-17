@@ -48,9 +48,14 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { useState } from "react";
-import { MODELS_BY_PROVIDER, getModelsByProvider } from "~/lib/models";
+import {
+  ALL_MODELS,
+  MODELS_BY_PROVIDER,
+  getModelsByProvider,
+} from "~/lib/models";
 import type { Provider } from "~/contexts/api-keys-context";
 import { AddApiKeyModal } from "~/components/ui/add-api-key-modal";
+import { ScrollArea } from "@radix-ui/react-scroll-area";
 
 export default function SettingsCategory() {
   const { category } = useParams();
@@ -383,73 +388,30 @@ export default function SettingsCategory() {
           <TabsContent value="model" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>AI Model Settings</CardTitle>
+                <CardTitle>Available Models</CardTitle>
                 <CardDescription>
-                  Configure AI model preferences and behavior.
+                  Choose which models appear in your model selector. This won't
+                  affect existing conversations.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Default Model</Label>
-                  <Select
-                    value={preferences.default_model || ""}
-                    onValueChange={(value) =>
-                      handlePreferenceChange({ default_model: value })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select default model" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="gpt-4">GPT-4</SelectItem>
-                      <SelectItem value="gpt-3.5-turbo">
-                        GPT-3.5 Turbo
-                      </SelectItem>
-                      <SelectItem value="claude-3">Claude 3</SelectItem>
-                      <SelectItem value="gemini-2.5-flash-preview-05-20">
-                        Gemini 2.5 Flash
-                      </SelectItem>
-                      <SelectItem value="deepseek-chat">
-                        DeepSeek Chat
-                      </SelectItem>
-                      <SelectItem value="deepseek-reasoner">
-                        DeepSeek Reasoner
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Temperature</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    max="2"
-                    step="0.1"
-                    value={preferences.temperature || 0.7}
-                    onChange={(e) =>
-                      handlePreferenceChange({
-                        temperature: parseFloat(e.target.value),
-                      })
-                    }
-                  />
-                  <p className="text-sm text-muted-foreground">
-                    Controls randomness in responses (0.0 = deterministic, 2.0 =
-                    very random)
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label>Max Tokens</Label>
-                  <Input
-                    type="number"
-                    min="1"
-                    max="4000"
-                    value={preferences.max_tokens || 2000}
-                    onChange={(e) =>
-                      handlePreferenceChange({
-                        max_tokens: parseInt(e.target.value),
-                      })
-                    }
-                  />
+                <div className="flex flex-col gap-4 p-4 overflow-y-scroll h-[500px]">
+                  {ALL_MODELS.map((model) => (
+                    <Card key={model.id}>
+                      <CardHeader>
+                        <CardTitle>
+                          <div className="flex flex-row">
+                            {model.name}
+                            <Switch className="ml-auto" />
+                          </div>
+                        </CardTitle>
+                        <CardDescription>{model.description}</CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="flex items-center gap-2"></div>
+                      </CardContent>
+                    </Card>
+                  ))}
                 </div>
               </CardContent>
             </Card>
