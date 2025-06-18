@@ -332,9 +332,14 @@ export const ChatMessageProvider = ({
 
         // === OPTIMIZED: Non-blocking background sync ===
         // Don't await - let this run in background
-        refreshMessages().catch((error) => {
-          console.error("Background sync failed:", error);
-        });
+        refreshMessages()
+          .catch((error) => {
+            console.error("Background sync failed:", error);
+          })
+          .finally(() => {
+            // Ensure loading is set to false after background sync completes
+            setLoading(false);
+          });
       } catch (error) {
         console.error("Error loading messages:", error);
         setLoading(false);
