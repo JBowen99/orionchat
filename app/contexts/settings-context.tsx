@@ -39,6 +39,7 @@ export interface UserPreferences {
   context_summary_model?: string;
   context_summary_auto_update?: boolean;
   context_smart_summary_recent_count?: number;
+  use_openrouter?: boolean;
 }
 
 type UserProfile = Tables<"user_profiles">;

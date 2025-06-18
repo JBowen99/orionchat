@@ -4,7 +4,7 @@
 export interface ModelConfig {
   id: string;
   name: string;
-  provider: "openai" | "anthropic" | "google" | "mistral" | "deepseek" | "custom";
+  provider: "openai" | "anthropic" | "google" | "deepseek" ;
   description: string;
   maxTokens?: number;
   temperature?: number;

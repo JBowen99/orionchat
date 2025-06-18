@@ -8,13 +8,16 @@ import {
   SendIcon,
   Loader2,
   ArrowDown,
+  FileText,
+  Clock,
+  Brain,
+  Layers,
 } from "lucide-react";
 import { Textarea } from "./ui/textarea";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import ModelSelector from "./model-selector";
 import { useChatMessageContext } from "~/contexts/chat-message-context";
-import { useApiKeys } from "~/contexts/api-keys-context";
-import { chatService } from "~/services/chat.service";
-import type { ChatMessage } from "~/services/chat.service";
+import { useSettings } from "~/contexts/settings-context";
 import { getModelById, DEFAULT_MODEL_ID } from "~/lib/models";
 import { v4 as uuidv4 } from "uuid";
 import { useNavigate } from "react-router";
@@ -22,12 +25,16 @@ import { createClient } from "~/lib/client";
 import { useUser } from "~/contexts/user-context";
 import { useChatContext } from "~/contexts/chat-list-context";
 import { useChat } from "~/hooks/use-chat";
+import { useModel } from "~/routes/chat";
+import { OpenRouterIcon } from "./openrouter-icon";
 
 interface ChatInputProps {
   disabled?: boolean;
   placeholder?: string;
   showScrollButton?: boolean;
   onScrollToBottom?: () => void;
+  selectedModel?: string;
+  onModelChange?: (model: string) => void;
 }
 
 export default function ChatInput({
@@ -35,26 +42,92 @@ export default function ChatInput({
   placeholder = "Type your message...",
   showScrollButton = false,
   onScrollToBottom,
+  selectedModel: propSelectedModel,
+  onModelChange,
 }: ChatInputProps) {
-  const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_MODEL_ID);
+  // Try to use ModelContext first, fall back to props, then to internal state
+  let selectedModel: string;
+  let setSelectedModel: (model: string) => void;
+
+  try {
+    const modelContext = useModel();
+    selectedModel = modelContext.selectedModel;
+    setSelectedModel = modelContext.setSelectedModel;
+  } catch {
+    // Fall back to props or internal state if context is not available
+    const [internalSelectedModel, setInternalSelectedModel] = useState<string>(
+      propSelectedModel || DEFAULT_MODEL_ID
+    );
+    selectedModel = propSelectedModel || internalSelectedModel;
+    setSelectedModel = onModelChange || setInternalSelectedModel;
+  }
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const navigate = useNavigate();
   const supabase = createClient();
   const { user } = useUser();
+  const { preferences } = useSettings();
 
   const { chatId } = useChatMessageContext();
   const { refreshChats } = useChatContext();
 
   // Use the useChat hook with persistence enabled
-  const { isLoading, error, sendMessage, clearError } = useChat({
+  const {
+    isLoading,
+    error,
+    sendMessage,
+    clearError,
+    // === SUMMARIZATION FEATURES ===
+    chatSummary,
+    isUpdatingSummary,
+    summaryError,
+    clearSummaryError,
+  } = useChat({
     model: selectedModel,
     usePersistedMessages: true,
     enableSystemPrompts: true,
     temperature: 0.7,
     maxTokens: 4096,
+    // === SUMMARIZATION CONFIGURATION ===
+    enableSummarization: true,
+    summaryThreshold: 8, // Start summarizing after 8 messages for testing
+    onSummaryUpdate: (summary: string) => {
+      console.log("✅ 📄 Conversation summary updated:", {
+        length: summary.length,
+        chatId: chatId,
+        selectedModel: selectedModel,
+        preview: summary.substring(0, 100) + "...",
+      });
+    },
+    onSummaryError: (error: Error) => {
+      console.error("❌ Summary generation failed:", error.message);
+    },
     onError: (error) => {
       console.error("Chat error:", error);
     },
+    onResponse: (response) => {
+      console.log("🔥 Chat response received:", {
+        model: response.model,
+        selectedModel: selectedModel,
+        contentLength: response.content.length,
+        chatId: chatId,
+        summarizationEnabled: true,
+        currentSummary: chatSummary?.substring(0, 50) + "..." || "No summary",
+      });
+    },
+  });
+
+  // === DEBUG: Log current state ===
+  console.log("🎯 ChatInput Debug State:", {
+    selectedModel,
+    chatId,
+    isLoading,
+    isUpdatingSummary,
+    hasChatSummary: !!chatSummary,
+    chatSummaryLength: chatSummary?.length || 0,
+    summaryError,
+    enableSummarization: true,
+    summaryThreshold: 8,
   });
 
   // Auto-resize textarea on input
@@ -176,6 +249,37 @@ export default function ChatInput({
 
   const canSend = !isLoading && selectedModel;
 
+  // Get context management icon based on the selected method
+  const getContextIcon = () => {
+    switch (preferences.context_management_method) {
+      case "full":
+        return <FileText className="w-4 h-4" />;
+      case "recent_messages":
+        return <Clock className="w-4 h-4" />;
+      case "model_summary":
+        return <Brain className="w-4 h-4" />;
+      case "smart_summary":
+        return <Layers className="w-4 h-4" />;
+      default:
+        return <FileText className="w-4 h-4" />;
+    }
+  };
+
+  const getContextTooltip = () => {
+    switch (preferences.context_management_method) {
+      case "full":
+        return "Full conversation context";
+      case "recent_messages":
+        return "Recent messages only";
+      case "model_summary":
+        return "AI-generated summary";
+      case "smart_summary":
+        return "Smart summary + recent";
+      default:
+        return "Full conversation context";
+    }
+  };
+
   return (
     <div className="flex flex-col items-center justify-center w-full">
       {/* Scroll to bottom button */}
@@ -213,6 +317,76 @@ export default function ChatInput({
               onValueChange={setSelectedModel}
             />
 
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="w-7 h-7 text-muted-foreground"
+                >
+                  {getContextIcon()}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{getContextTooltip()}</p>
+                {chatSummary && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Summary: {chatSummary.length} chars
+                  </p>
+                )}
+              </TooltipContent>
+            </Tooltip>
+
+            {/* Summarization Status Indicator */}
+            {isUpdatingSummary && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    className="w-7 h-7 text-blue-500"
+                    disabled
+                  >
+                    <Brain className="w-4 h-4 animate-pulse" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Generating conversation summary...</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+
+            {/* Summary Error Indicator */}
+            {summaryError && !isUpdatingSummary && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    className="w-7 h-7 text-orange-500"
+                    onClick={clearSummaryError}
+                  >
+                    <Brain className="w-4 h-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Summary generation failed</p>
+                  <p className="text-xs text-muted-foreground">
+                    Click to dismiss
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+
+            {preferences.use_openrouter && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <OpenRouterIcon className="w-4 h-4 text-muted-foreground" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Using OpenRouter</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+
+            {/*
             <Button
               variant="ghost"
               className="w-7 h-7 text-muted-foreground"
@@ -228,6 +402,7 @@ export default function ChatInput({
             >
               <Paperclip />
             </Button>
+            */}
 
             <Button
               size="icon"

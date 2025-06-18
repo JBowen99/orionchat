@@ -209,9 +209,9 @@ export default function ChatSidebar() {
               onClick={handleNewChat}
               disabled={creatingChat}
             >
-              <PlusIcon className="w-4 h-4 mr-2" />
               {creatingChat ? "Creating..." : "New Chat"}
             </Button>
+            {/* 
             <Button
               variant="ghost"
               className="flex-shrink-0 h-8 new-chat-button"
@@ -220,6 +220,7 @@ export default function ChatSidebar() {
             >
               <ImagePlus className="w-4 h-4" />
             </Button>
+            */}
           </div>
           <div className="relative flex flex-row items-center justify-center">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />

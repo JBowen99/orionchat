@@ -1,30 +1,55 @@
-# Welcome to React Router!
+# Welcome to Orion Chat!
 
-A modern, production-ready template for building full-stack React applications using React Router.
+An Open Source AI Chat App
 
 ## Features
 
-- 🚀 Server-side rendering
-- ⚡️ Hot Module Replacement (HMR)
-- 📦 Asset bundling and optimization
-- 🔄 Data loading and mutations
-- 🔒 TypeScript by default
-- 🎉 TailwindCSS for styling
-- 📖 [React Router docs](https://reactrouter.com/)
+- Model select
+- Themes
+- Context management
+- Context preview sidebar
+- Message retry, message editing, branch chats, shared chats
+- Supabase for online sync and Dexie.js for local cache
+
+## Tech Stack
+
+- React Router v7 in framework mode
+- Shadcn + Tailwind for components and styling
+- Supabase for database and authentication
+- Dexie.js for caching
 
 ## Getting Started
 
 ### Installation
 
-Install the dependencies:
+Clone the repo:
+
+```bash
+git clone https://github.com/JBowen99/orionchat.git
+```
+
+Navigate inside the repository and install the dependencies:
 
 ```bash
 npm install
 ```
 
+### Supabase setup
+
+Setup your Supbase Project
+Go to the SQL editor and run the setup script.
+Copy the url and anon key to the .env file, refer to the .env.example.
+
+You're ready to start the server
+
+### API Keys
+
+Once you start the server, go to the settings page and add your api keys.
+Keys are stored encrypted on your machine locally. They are not stored online.
+
 ### Development
 
-Start the development server with HMR:
+Start the development server:
 
 ```bash
 npm run dev
@@ -42,12 +67,8 @@ npm run build
 
 ## Deployment
 
+The project is setup for deployment to Netlify. You'll need a different adapter to use it with Vercel or other hosting platforms.
+
 [![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/remix-run/react-router-templates&create_from_path=netlify)
 
-## Styling
-
-This template comes with [Tailwind CSS](https://tailwindcss.com/) already configured for a simple default starting experience. You can use whatever CSS framework you prefer.
-
 ---
-
-Built with ❤️ using React Router.

@@ -1,5 +1,5 @@
 import { useParams } from "react-router";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useChatMessageContext } from "~/contexts/chat-message-context";
 import { useChatContext } from "~/contexts/chat-list-context";
 import { Badge } from "~/components/ui/badge";
@@ -26,9 +26,14 @@ function ChatArea() {
   const { chatId } = useParams();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const [aiContextOpen, setAiContextOpen] = useState(false);
 
   // Check if chat exists
   const chatExists = chatId && chats.some((chat) => chat.id === chatId);
+
+  const toggleAiContext = () => {
+    setAiContextOpen((prev) => !prev);
+  };
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -103,31 +108,42 @@ function ChatArea() {
   }
 
   return (
-    <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-6 pb-32">
-      <div className="absolute right-0 top-1/2 -translate-y-1/2 bg-primary p-2 rounded-l-xl">
-        <div className="flex flex-col items-center gap-2">
-          <BrainCircuit size={28} strokeWidth={1} />
+    <>
+      <div
+        ref={chatContainerRef}
+        className="flex-1 overflow-y-auto overflow-x-hidden p-6 pb-32"
+      >
+        {!aiContextOpen && (
+          <Button
+            variant="default"
+            size="icon"
+            onClick={toggleAiContext}
+            className="absolute right-0 top-1/2 -translate-y-1/2 z-40 h-12 w-12 rounded-l-xl rounded-r-none shadow-lg motion-translate-x-in-50"
+          >
+            <BrainCircuit size={24} strokeWidth={1.5} />
+          </Button>
+        )}
+        <div className="space-y-6 max-w-4xl mx-auto">
+          {messages.map((message) => (
+            <div key={message.id}>
+              {message.role === "user" ? (
+                <ChatBubbleUser message={message} />
+              ) : (
+                <ChatBubbleResponse message={message} />
+              )}
+            </div>
+          ))}
+          {syncing && (
+            <div className="flex justify-center">
+              <div className="text-sm text-muted-foreground">Syncing...</div>
+            </div>
+          )}
+          {/* Invisible element to scroll to */}
+          <div ref={messagesEndRef} />
         </div>
       </div>
-      <div className="space-y-6 max-w-4xl mx-auto">
-        {messages.map((message) => (
-          <div key={message.id}>
-            {message.role === "user" ? (
-              <ChatBubbleUser message={message} />
-            ) : (
-              <ChatBubbleResponse message={message} />
-            )}
-          </div>
-        ))}
-        {syncing && (
-          <div className="flex justify-center">
-            <div className="text-sm text-muted-foreground">Syncing...</div>
-          </div>
-        )}
-        {/* Invisible element to scroll to */}
-        <div ref={messagesEndRef} />
-      </div>
-    </div>
+      <AiContextSidebar isOpen={aiContextOpen} onToggle={toggleAiContext} />
+    </>
   );
 }
 

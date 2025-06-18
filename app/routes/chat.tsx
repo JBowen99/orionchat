@@ -6,13 +6,27 @@ import { SidebarProvider, SidebarInset } from "~/components/ui/sidebar";
 import { ChatProvider } from "~/contexts/chat-list-context";
 import { ChatMessageProvider } from "~/contexts/chat-message-context";
 import { Card, CardContent } from "~/components/ui/card";
-import { useState } from "react";
+import { useState, createContext, useContext } from "react";
 import { useRef } from "react";
 import { useEffect } from "react";
 import { useUser } from "~/contexts/user-context";
 import { Button } from "~/components/ui/button";
 import WelcomeMessage from "~/components/welcome-message";
-import AiContextSidebar from "~/components/ai-context-sidebar";
+import { DEFAULT_MODEL_ID } from "~/lib/models";
+
+// Model Context for sharing selected model
+const ModelContext = createContext<{
+  selectedModel: string;
+  setSelectedModel: (model: string) => void;
+} | null>(null);
+
+export const useModel = () => {
+  const context = useContext(ModelContext);
+  if (!context) {
+    throw new Error("useModel must be used within ModelContext");
+  }
+  return context;
+};
 
 function ChatContent() {
   const location = useLocation();
@@ -23,6 +37,12 @@ function ChatContent() {
   // Extract chatId from the current path
   const pathParts = location.pathname.split("/");
   const chatId = pathParts.length > 2 ? pathParts[2] : null;
+
+  console.log("🎯 Chat Route Debug:", {
+    isHomePage,
+    chatId,
+    pathname: location.pathname,
+  });
 
   // Handle scroll detection
   useEffect(() => {
@@ -52,11 +72,11 @@ function ChatContent() {
   };
 
   return (
-    <div className="flex flex-col h-screen w-full relative chat-background">
+    <div className="flex flex-col h-screen w-full relative chat-background overflow-x-hidden">
       {/* Chat Area */}
       <div
         ref={chatAreaRef}
-        className="flex-1 overflow-y-scroll scrollbar-hide"
+        className="flex-1 overflow-y-scroll overflow-x-hidden scrollbar-hide"
       >
         {isHomePage ? (
           <div className="flex flex-col items-center justify-center h-full">
@@ -80,21 +100,33 @@ function ChatContent() {
 
 export default function Index() {
   const location = useLocation();
+  const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_MODEL_ID);
 
   // Extract chatId from the current path
   const pathParts = location.pathname.split("/");
   const chatId = pathParts.length > 2 ? pathParts[2] : null;
 
+  console.log("🎯 Chat Route - Extracted chatId:", {
+    pathname: location.pathname,
+    pathParts,
+    chatId,
+    chatIdType: typeof chatId,
+  });
+
   return (
     <div className="flex flex-col items-center justify-center h-screen">
       <SidebarProvider>
-        <ChatMessageProvider chatId={chatId}>
-          <ChatSidebar />
-          <FloatingButtons />
-          <SidebarInset>
-            <ChatContent />
-          </SidebarInset>
-        </ChatMessageProvider>
+        <ModelContext.Provider value={{ selectedModel, setSelectedModel }}>
+          <ChatProvider selectedChatId={chatId || undefined}>
+            <ChatMessageProvider chatId={chatId}>
+              <ChatSidebar />
+              <FloatingButtons />
+              <SidebarInset>
+                <ChatContent />
+              </SidebarInset>
+            </ChatMessageProvider>
+          </ChatProvider>
+        </ModelContext.Provider>
       </SidebarProvider>
     </div>
   );

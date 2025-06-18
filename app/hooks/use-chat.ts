@@ -1,8 +1,10 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useApiKeys } from "~/contexts/api-keys-context";
 import { useSettings } from "~/contexts/settings-context";
 import { useUser } from "~/contexts/user-context";
 import { useChatMessageContext } from "~/contexts/chat-message-context";
+import { useChatContext } from "~/contexts/chat-list-context";
+import { useConversationSummary } from "~/hooks/use-conversation-summary";
 import { systemPromptBuilder } from "~/lib/system-prompt-builder";
 import { chatService } from "~/services/chat.service";
 import { getModelById } from "~/lib/models";
@@ -20,6 +22,11 @@ export interface UseChatOptions {
   // === CORE FEATURES ===
   usePersistedMessages?: boolean; // Enable message persistence integration
   enableSystemPrompts?: boolean; // Enable system prompting with user context
+  // === SUMMARIZATION FEATURES ===
+  enableSummarization?: boolean; // Enable automatic conversation summarization
+  summaryThreshold?: number; // Number of messages before creating/updating summary (default: 10)
+  onSummaryUpdate?: (summary: string) => void; // Callback when summary is updated
+  onSummaryError?: (error: Error) => void; // Callback when summary fails
 }
 
 export interface UseChatReturn {
@@ -33,6 +40,11 @@ export interface UseChatReturn {
   // === PERSISTENCE FEATURES ===
   persistedMessages?: Message[]; // Access to persisted messages when enabled
   chatId?: string | null; // Current chat ID when using persistence
+  // === SUMMARIZATION FEATURES ===
+  chatSummary?: string | null; // Current conversation summary
+  isUpdatingSummary?: boolean; // Whether summary is being generated/updated
+  summaryError?: string | null; // Summary-related errors
+  clearSummaryError?: () => void; // Clear summary errors
 }
 
 export function useChat(options: UseChatOptions = {}): UseChatReturn {
@@ -45,11 +57,19 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   // === MESSAGE PERSISTENCE INTEGRATION ===
   const persistenceContext = options.usePersistedMessages ? useChatMessageContext() : null;
   
+  // === CHAT LIST INTEGRATION ===
+  const chatListContext = useChatContext();
+  
   // State management - use persisted messages if enabled, otherwise internal state
   const [internalMessages, setInternalMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
+  
+  // === SUMMARIZATION STATE ===
+  const [chatSummary, setChatSummary] = useState<string | null>(null);
+  const [isUpdatingSummary, setIsUpdatingSummary] = useState(false);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
 
   const {
     model = "gemini-2.5-flash-preview-05-20",
@@ -60,7 +80,32 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     onStreamingChunk,
     usePersistedMessages = false,
     enableSystemPrompts = false,
+    enableSummarization = false,
+    summaryThreshold = 10,
+    onSummaryUpdate,
+    onSummaryError,
   } = options;
+
+  // === CONVERSATION SUMMARY HOOK ===
+  const conversationSummary = useConversationSummary({
+    model: model, // Use same model for summarization
+    onSummaryStart: () => setIsUpdatingSummary(true),
+    onSummaryComplete: (summary: string) => {
+      setChatSummary(summary);
+      setIsUpdatingSummary(false);
+      setSummaryError(null);
+      if (onSummaryUpdate) {
+        onSummaryUpdate(summary);
+      }
+    },
+    onSummaryError: (error: Error) => {
+      setIsUpdatingSummary(false);
+      setSummaryError(error.message);
+      if (onSummaryError) {
+        onSummaryError(error);
+      }
+    },
+  });
 
   // === MESSAGE PERSISTENCE: Choose message source ===
   const messages = usePersistedMessages && persistenceContext 
@@ -71,6 +116,86 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     : internalMessages;
 
   const chatId = usePersistedMessages && persistenceContext ? persistenceContext.chatId : null;
+
+  // === SUMMARIZATION HELPER FUNCTIONS ===
+  const clearSummaryError = useCallback(() => {
+    setSummaryError(null);
+  }, []);
+
+  const shouldTriggerSummarization = useCallback((messageCount: number): boolean => {
+    if (!enableSummarization || !usePersistedMessages || !persistenceContext || !chatId) {
+      return false;
+    }
+    
+    // Only summarize if we have enough messages
+    return messageCount >= summaryThreshold;
+  }, [enableSummarization, usePersistedMessages, persistenceContext, chatId, summaryThreshold]);
+
+  const updateChatSummary = useCallback(async (summary: string) => {
+    if (!usePersistedMessages || !persistenceContext || !chatId) {
+      console.log("❌ Cannot update chat summary - missing requirements:", {
+        usePersistedMessages,
+        hasPersistenceContext: !!persistenceContext,
+        chatId
+      });
+      return;
+    }
+
+    try {
+      console.log("💾 Updating chat summary for chatId:", chatId, "Summary length:", summary.length);
+      
+      // Use chat-list-context to update summary for better UI consistency
+      await chatListContext.updateChatSummary(chatId, summary);
+
+      console.log("✅ Successfully updated chat summary in database and UI");
+    } catch (error) {
+      console.error("❌ Failed to update chat summary:", error);
+      throw error;
+    }
+  }, [usePersistedMessages, persistenceContext, chatId, chatListContext]);
+
+  const performSummarization = useCallback(async (messages: Message[]) => {
+    console.log("🔍 Checking if summarization should be performed:", {
+      enableSummarization,
+      messageCount: messages.length,
+      summaryThreshold,
+      shouldTrigger: shouldTriggerSummarization(messages.length),
+      hasExistingSummary: !!chatSummary
+    });
+
+    if (!enableSummarization || !shouldTriggerSummarization(messages.length)) {
+      console.log("⏭️ Skipping summarization - conditions not met");
+      return;
+    }
+
+    console.log("🎯 Starting summarization process...");
+
+    try {
+      let newSummary: string;
+      
+      // Check if we have an existing summary
+      if (chatSummary) {
+        console.log("🔄 Updating existing summary with recent messages");
+        // Update existing summary with new messages
+        // Get messages after the last summary (simplified approach)
+        const recentMessages = messages.slice(-5); // Get last 5 messages for update
+        newSummary = await conversationSummary.updateSummary(chatSummary, recentMessages);
+      } else {
+        console.log("📝 Creating new summary from all messages");
+        // Create new summary from all messages
+        newSummary = await conversationSummary.createSummary(messages);
+      }
+
+      console.log("✅ Summary generated successfully, length:", newSummary.length);
+
+      // Update the chat summary in the database
+      await updateChatSummary(newSummary);
+      
+    } catch (error) {
+      console.error("❌ Summarization failed:", error);
+      // Don't throw - summarization is optional
+    }
+  }, [enableSummarization, shouldTriggerSummarization, chatSummary, conversationSummary, updateChatSummary]);
 
   // Helper method to create user-friendly error messages
   const createUserFriendlyErrorMessage = useCallback((errorMessage: string): string => {
@@ -143,17 +268,14 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       return messagesToSend;
     }
 
-    // Build system prompt context
-    const systemPromptContext = {
+    // Generate system prompt with intelligent context management
+    const systemPrompt = systemPromptBuilder.buildContextAwareSystemPrompt({
       userSettings: preferences,
       modelConfig: getModelById(model),
-      conversationContext: {
-        messages: messagesToSend,
-      },
-    };
-
-    // Generate system prompt
-    const systemPrompt = systemPromptBuilder.buildSystemPrompt(systemPromptContext);
+      conversationSummary: chatSummary || undefined,
+      allMessages: messagesToSend,
+      maxContextTokens: 2000, // Adjust based on model context limits
+    });
 
     // Check if there's already a system message
     const hasSystemMessage = messagesToSend.some(msg => msg.role === "system");
@@ -172,7 +294,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         ...messagesToSend
       ];
     }
-  }, [enableSystemPrompts, preferences, model]);
+  }, [enableSystemPrompts, preferences, model, chatSummary]);
 
   const sendMessages = useCallback(
     async (messagesToSend: ChatMessage[], options: { stream?: boolean; chatId?: string } = {}) => {
@@ -184,6 +306,16 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       try {
         // === SYSTEM PROMPTING: Enhance messages with system prompt ===
         const enhancedMessages = buildEnhancedMessages(messagesToSend);
+
+        // === DEBUG: Log complete message structure sent to AI ===
+        console.log("🤖 Complete message sent to AI model:", {
+          model,
+          messages: enhancedMessages,
+          messageCount: enhancedMessages.length,
+          systemPromptLength: enhancedMessages.find(msg => msg.role === 'system')?.content?.length || 0,
+          userMessages: enhancedMessages.filter(msg => msg.role === 'user').length,
+          assistantMessages: enhancedMessages.filter(msg => msg.role === 'assistant').length,
+        });
 
         // Prepare API keys in the format expected by the service
         const apiKeysForService = Object.entries(apiKeys).reduce(
@@ -326,6 +458,15 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
                     metadata: chunk.metadata,
                   });
                 }
+
+                // === SUMMARIZATION: Trigger after successful streaming response ===
+                try {
+                  await performSummarization(persistenceContext.messages);
+                } catch (summaryError) {
+                  console.warn("Summarization failed after streaming response:", summaryError);
+                  // Don't fail the main conversation flow
+                }
+
                 break;
               }
             }
@@ -355,6 +496,14 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
 
             if (onResponse) {
               onResponse(response);
+            }
+
+            // === SUMMARIZATION: Trigger after successful non-streaming response ===
+            try {
+              await performSummarization(persistenceContext.messages);
+            } catch (summaryError) {
+              console.warn("Summarization failed after non-streaming response:", summaryError);
+              // Don't fail the main conversation flow
             }
           }
         } else {
@@ -612,6 +761,38 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     [messages, sendMessages, usePersistedMessages, persistenceContext, chatId]
   );
 
+  // === LOAD EXISTING CHAT SUMMARY ===
+  useEffect(() => {
+    const loadChatSummary = async () => {
+      if (!enableSummarization || !usePersistedMessages || !chatId) {
+        setChatSummary(null);
+        return;
+      }
+
+      try {
+        const { createClient } = await import("~/lib/client");
+        const supabase = createClient();
+        
+        const { data, error } = await supabase
+          .from("chats")
+          .select("chat_summary")
+          .eq("id", chatId)
+          .single();
+
+        if (error) {
+          console.error("Error loading chat summary:", error);
+          return;
+        }
+
+        setChatSummary(data?.chat_summary || null);
+      } catch (error) {
+        console.error("Failed to load chat summary:", error);
+      }
+    };
+
+    loadChatSummary();
+  }, [enableSummarization, usePersistedMessages, chatId]);
+
   const returnValue: UseChatReturn = {
     messages,
     isLoading,
@@ -620,6 +801,11 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     sendMessages,
     clearMessages,
     clearError,
+    // === SUMMARIZATION FEATURES ===
+    chatSummary,
+    isUpdatingSummary,
+    summaryError,
+    clearSummaryError,
   };
 
   // === PERSISTENCE FEATURES: Add persistence-related data when enabled ===

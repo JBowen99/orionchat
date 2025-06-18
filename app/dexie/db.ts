@@ -23,8 +23,8 @@ class AppDatabase extends Dexie {
   constructor() {
     super('aiChatAppDB')
 
-    this.version(1).stores({
-      chats: 'id, user_id, created_at, updated_at, pinned, parent_chat_id, project_id, shared',
+    this.version(2).stores({
+      chats: 'id, user_id, created_at, updated_at, pinned, parent_chat_id, project_id, shared, chat_summary',
       messages: 'id, chat_id, created_at, parent_message_id, role, type',
       hats: 'id, user_id, is_default, created_at, updated_at',
       projects: 'id, user_id, created_at, updated_at',
