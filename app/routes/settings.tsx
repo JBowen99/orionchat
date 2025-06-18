@@ -1,10 +1,23 @@
 import { ArrowLeft, LogOut, User } from "lucide-react";
 import { Link, Outlet, useNavigate, useParams } from "react-router";
+import { type LoaderFunctionArgs, redirect } from "react-router";
+import { createClient } from "~/lib/server";
 import { Button } from "~/components/ui/button";
 import { Progress } from "~/components/ui/progress";
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { ThemeToggle } from "~/components/ui/theme-toggle";
 import { useUser } from "~/contexts/user-context";
+
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const { supabase } = createClient(request);
+
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data?.user) {
+    return redirect("/login");
+  }
+
+  return data;
+};
 
 export default function Settings() {
   const { user, loading: userLoading, signOut } = useUser();

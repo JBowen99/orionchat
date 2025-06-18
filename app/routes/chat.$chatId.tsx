@@ -19,6 +19,19 @@ import { ChatBubbleResponse } from "~/components/chat-bubble-response";
 import { Button } from "~/components/ui/button";
 import AiContextSidebar from "~/components/ai-context-sidebar";
 import { SidebarTrigger } from "~/components/ui/sidebar";
+import { type LoaderFunctionArgs, redirect } from "react-router";
+import { createClient } from "~/lib/server";
+
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const { supabase } = createClient(request);
+
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data?.user) {
+    return redirect("/login");
+  }
+
+  return data;
+};
 
 function ChatArea() {
   const { messages, loading, syncing } = useChatMessageContext();

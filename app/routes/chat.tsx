@@ -1,4 +1,6 @@
 import { Outlet, useLocation, useParams } from "react-router";
+import { type LoaderFunctionArgs, redirect } from "react-router";
+import { createClient } from "~/lib/server";
 import ChatInput from "~/components/chat-input";
 import ChatSidebar from "~/components/chat-sidebar";
 import FloatingButtons from "~/components/floating-buttons";
@@ -97,6 +99,17 @@ function ChatContent() {
     </div>
   );
 }
+
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const { supabase } = createClient(request);
+
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data?.user) {
+    return redirect("/login");
+  }
+
+  return data;
+};
 
 export default function Index() {
   const location = useLocation();

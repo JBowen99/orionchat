@@ -1,4 +1,6 @@
 import { useParams } from "react-router";
+import { type LoaderFunctionArgs, redirect } from "react-router";
+import { createClient } from "~/lib/server";
 import { TabsContent } from "~/components/ui/tabs";
 import {
   Card,
@@ -56,6 +58,17 @@ import {
 import type { Provider } from "~/contexts/api-keys-context";
 import { AddApiKeyModal } from "~/components/ui/add-api-key-modal";
 import { ScrollArea } from "@radix-ui/react-scroll-area";
+
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const { supabase } = createClient(request);
+
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data?.user) {
+    return redirect("/login");
+  }
+
+  return data;
+};
 
 export default function SettingsCategory() {
   const { category } = useParams();
