@@ -3,6 +3,7 @@ import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 import { getModelById, getGoogleModelName, type ModelConfig } from "~/lib/models";
 import type { Provider } from "~/contexts/api-keys-context";
+import type { UserPreferences } from "~/contexts/settings-context";
 
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
@@ -15,6 +16,7 @@ export interface ChatRequest {
   temperature?: number;
   maxTokens?: number;
   stream?: boolean;
+  userPreferences?: UserPreferences;
 }
 
 export interface ChatResponse {
@@ -57,6 +59,10 @@ export class ChatService {
     request: ChatRequest,
     apiKeys: Record<Provider, string | null>
   ): Promise<ChatResponse> {
+    if (request.userPreferences?.use_openrouter && apiKeys.openrouter) {
+      return await this.callOpenRouter(request, apiKeys.openrouter);
+    }
+
     const model = getModelById(request.model);
     if (!model) {
       throw new Error(`Model ${request.model} not found`);
@@ -99,6 +105,11 @@ export class ChatService {
     request: ChatRequest,
     apiKeys: Record<Provider, string | null>
   ): AsyncGenerator<StreamingChatResponse, void, unknown> {
+    if (request.userPreferences?.use_openrouter && apiKeys.openrouter) {
+      yield* this.callOpenRouterStreaming(request, apiKeys.openrouter);
+      return;
+    }
+
     const model = getModelById(request.model);
     if (!model) {
       throw new Error(`Model ${request.model} not found`);
@@ -126,7 +137,6 @@ export class ChatService {
           yield* this.callDeepSeekStreaming(model, request, apiKey);
           break;
         default:
-          // Fallback to non-streaming for unsupported providers
           const response = await this.generateChatCompletion(request, apiKeys);
           yield {
             content: response.content,
@@ -218,7 +228,6 @@ export class ChatService {
       content: msg.content,
     }));
 
-    // Special handling for reasoning models (O-series) - they don't support streaming
     if (model.id.startsWith("o1") || model.id.startsWith("o3") || model.id.startsWith("o4")) {
       const completion = await openai.chat.completions.create({
         model: model.id,
@@ -748,6 +757,178 @@ export class ChatService {
     }
 
     return { system, messages: anthropicMessages };
+  }
+
+  /**
+   * Convert model ID to OpenRouter format
+   */
+  private getOpenRouterModelName(request: ChatRequest): string {
+    const model = getModelById(request.model);
+    if (!model) {
+      // If model not found in our config, pass through as-is (might already be in OpenRouter format)
+      return request.model;
+    }
+
+    // Map provider to OpenRouter prefix
+    const providerPrefix = {
+      "openai": "openai",
+      "anthropic": "anthropic", 
+      "google": "google",
+      "deepseek": "deepseek"
+    }[model.provider];
+
+    if (!providerPrefix) {
+      // Unknown provider, pass through as-is
+      return request.model;
+    }
+
+    // If already in OpenRouter format (contains /), return as-is
+    if (request.model.includes('/')) {
+      return request.model;
+    }
+
+    // Format: provider/model-id
+    return `${providerPrefix}/${request.model}`;
+  }
+
+  /**
+   * OpenRouter API implementation
+   */
+  private async callOpenRouter(
+    request: ChatRequest,
+    apiKey: string
+  ): Promise<ChatResponse> {
+    const openRouterModelName = this.getOpenRouterModelName(request);
+    console.log(`🔀 OpenRouter: Using model "${openRouterModelName}"`);
+    
+    const openai = new OpenAI({
+      baseURL: 'https://openrouter.ai/api/v1',
+      apiKey: apiKey,
+      defaultHeaders: {
+        'HTTP-Referer': 'https://yapchat.com',
+        'X-Title': 'YapChat',
+      },
+      dangerouslyAllowBrowser: true,
+    });
+
+    const messages = request.messages.map((msg) => ({
+      role: msg.role as "system" | "user" | "assistant",
+      content: msg.content,
+    }));
+
+    const completion = await openai.chat.completions.create({
+      model: openRouterModelName, // Use the properly formatted model name
+      messages: messages,
+      temperature: request.temperature || 0.7,
+      max_tokens: request.maxTokens || 4096,
+      stream: false,
+    });
+
+    const chatCompletion = completion as OpenAI.Chat.Completions.ChatCompletion;
+    const choice = chatCompletion.choices[0];
+    
+    if (!choice?.message?.content) {
+      throw new Error("No response content received from OpenRouter API");
+    }
+
+    const usage = chatCompletion.usage
+      ? {
+          inputTokens: chatCompletion.usage.prompt_tokens || 0,
+          outputTokens: chatCompletion.usage.completion_tokens || 0,
+        }
+      : undefined;
+
+    return {
+      content: choice.message.content,
+      model: request.model,
+      usage,
+      metadata: {
+        model: request.model,
+        temperature: request.temperature || 0.7,
+        finishReason: choice.finish_reason,
+        modelType: "openrouter",
+      },
+    };
+  }
+
+  /**
+   * OpenRouter streaming implementation
+   */
+  private async *callOpenRouterStreaming(
+    request: ChatRequest,
+    apiKey: string
+  ): AsyncGenerator<StreamingChatResponse, void, unknown> {
+    const openRouterModelName = this.getOpenRouterModelName(request);
+    console.log(`🔀 OpenRouter Streaming: Using model "${openRouterModelName}"`);
+    
+    const openai = new OpenAI({
+      baseURL: 'https://openrouter.ai/api/v1',
+      apiKey: apiKey,
+      defaultHeaders: {
+        'HTTP-Referer': 'https://real-orion-chat.netlify.app',
+        'X-Title': 'OrionChat',
+      },
+      dangerouslyAllowBrowser: true,
+    });
+
+    const messages = request.messages.map((msg) => ({
+      role: msg.role as "system" | "user" | "assistant",
+      content: msg.content,
+    }));
+
+    const stream = await openai.chat.completions.create({
+      model: openRouterModelName, // Use the properly formatted model name
+      messages: messages,
+      temperature: request.temperature || 0.7,
+      max_tokens: request.maxTokens || 4096,
+      stream: true,
+    });
+
+    let fullContent = "";
+    let totalUsage: { inputTokens: number; outputTokens: number } | undefined;
+
+    for await (const chunk of stream) {
+      const choice = chunk.choices[0];
+
+      if (choice?.delta?.content) {
+        const delta = choice.delta.content;
+        fullContent += delta;
+
+        yield {
+          content: fullContent,
+          delta: delta,
+          model: request.model,
+          finished: false,
+          metadata: {
+            model: request.model,
+            temperature: request.temperature || 0.7,
+            modelType: "openrouter",
+          },
+        };
+      }
+
+      if (choice?.finish_reason) {
+        if (chunk.usage) {
+          totalUsage = {
+            inputTokens: chunk.usage.prompt_tokens || 0,
+            outputTokens: chunk.usage.completion_tokens || 0,
+          };
+        }
+
+        yield {
+          content: fullContent,
+          model: request.model,
+          finished: true,
+          usage: totalUsage,
+          metadata: {
+            model: request.model,
+            temperature: request.temperature || 0.7,
+            finishReason: choice.finish_reason,
+            modelType: "openrouter",
+          },
+        };
+      }
+    }
   }
 }
 

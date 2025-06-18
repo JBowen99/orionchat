@@ -68,6 +68,7 @@ export async function action({ request }: ActionFunctionArgs) {
       temperature: body.temperature,
       maxTokens: body.maxTokens,
       stream: body.stream || false,
+      userPreferences: body.userPreferences,
     };
 
     // Handle streaming vs non-streaming requests

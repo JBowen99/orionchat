@@ -637,18 +637,28 @@ export function getAvailableProviders(): Array<{
       label: "DeepSeek",
       description: "DeepSeek Chat and Reasoner models",
     },
+    openrouter: {
+      label: "OpenRouter",
+      description: "Access to 100+ models from multiple providers",
+    },
     custom: {
       label: "Custom Provider",
       description: "Custom API endpoints and models",
     },
   };
 
-  return Object.entries(providerCounts)
+  // Add OpenRouter manually since it's not in the models list but should be available
+  const allProviders = { ...providerCounts };
+  if (!allProviders.openrouter) {
+    allProviders.openrouter = 0; // Set to 0 since it's a router to other models
+  }
+
+  return Object.entries(allProviders)
     .map(([provider, count]) => ({
       value: provider,
       label: providerNames[provider]?.label || provider,
       description: providerNames[provider]?.description || `${provider} models`,
-      modelCount: count,
+      modelCount: provider === 'openrouter' ? 100 : count, // Show 100+ for OpenRouter
     }))
     .sort((a, b) => a.label.localeCompare(b.label));
 } 

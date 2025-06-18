@@ -14,6 +14,7 @@ export type Provider =
   | "google"
   | "mistral"
   | "deepseek"
+  | "openrouter"
   | "custom";
 
 export interface ApiKeyEntry {
@@ -47,6 +48,7 @@ export const ApiKeysProvider = ({ children }: { children: ReactNode }) => {
     google: null,
     mistral: null,
     deepseek: null,
+    openrouter: null,
     custom: null,
   });
   const [loading, setLoading] = useState(true);

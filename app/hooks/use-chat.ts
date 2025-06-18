@@ -332,6 +332,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           temperature,
           maxTokens,
           stream,
+          userPreferences: preferences, // Pass user preferences for OpenRouter routing
         };
 
         if (usePersistedMessages && persistenceContext) {

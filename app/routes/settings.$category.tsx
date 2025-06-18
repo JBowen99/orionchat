@@ -76,6 +76,7 @@ export default function SettingsCategory() {
     google: false,
     mistral: false,
     deepseek: false,
+    openrouter: false,
     custom: false,
   });
   const [showAddModal, setShowAddModal] = useState(false);
@@ -128,6 +129,7 @@ export default function SettingsCategory() {
       google: "Google AI",
       mistral: "Mistral AI",
       deepseek: "DeepSeek",
+      openrouter: "OpenRouter",
       custom: "Custom Provider",
     };
     return names[provider];
@@ -140,12 +142,17 @@ export default function SettingsCategory() {
       google: "Gemini models for multimodal AI",
       mistral: "Open and commercial Mistral models",
       deepseek: "DeepSeek Chat and Reasoner models",
+      openrouter: "Access to 100+ models from multiple providers",
       custom: "Custom API endpoints and models",
     };
     return descriptions[provider];
   };
 
   const getProviderModels = (provider: Provider) => {
+    if (provider === "openrouter") {
+      // OpenRouter doesn't have specific models in our list, but provides access to many models
+      return [];
+    }
     return getModelsByProvider(provider);
   };
 
@@ -771,6 +778,42 @@ export default function SettingsCategory() {
                       </Button>
                     </div>
 
+                    {/* OpenRouter Usage Toggle - only show if OpenRouter key is configured */}
+                    {hasKey("openrouter") && (
+                      <Card className="border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-950/20">
+                        <CardContent className="pt-6">
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-1">
+                              <Label className="text-base font-medium">
+                                Use OpenRouter
+                              </Label>
+                              <p className="text-sm text-muted-foreground">
+                                Route all requests through OpenRouter instead of
+                                individual provider APIs. This gives you access
+                                to 100+ models through a single API.
+                              </p>
+                            </div>
+                            <Switch
+                              checked={preferences.use_openrouter ?? false}
+                              onCheckedChange={(checked) =>
+                                handlePreferenceChange({
+                                  use_openrouter: checked,
+                                })
+                              }
+                            />
+                          </div>
+                          {preferences.use_openrouter && (
+                            <div className="mt-3 p-3 bg-blue-100/50 dark:bg-blue-900/20 rounded-lg">
+                              <p className="text-sm text-blue-700 dark:text-blue-300">
+                                ✓ OpenRouter is active. All model requests will
+                                be routed through OpenRouter's API.
+                              </p>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    )}
+
                     {configuredProviders.length === 0 ? (
                       <div className="text-center py-8">
                         <Shield className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
@@ -802,7 +845,9 @@ export default function SettingsCategory() {
                                     {getProviderDescription(provider)}
                                   </p>
                                   <p className="text-xs text-muted-foreground">
-                                    {models.length > 0
+                                    {provider === "openrouter"
+                                      ? "100+ models available"
+                                      : models.length > 0
                                       ? `${models.length} model${
                                           models.length !== 1 ? "s" : ""
                                         } available`

@@ -94,11 +94,11 @@ export default function Settings() {
           >
             <TabsList>
               <TabsTrigger value="customization">Customization</TabsTrigger>
-              <TabsTrigger value="history">History & Sync</TabsTrigger>
+              {/*<TabsTrigger value="history">History & Sync</TabsTrigger>
               <TabsTrigger value="model">Models</TabsTrigger>
-              <TabsTrigger value="api-keys">API Keys</TabsTrigger>
               <TabsTrigger value="attachments">Attachments</TabsTrigger>
-              <TabsTrigger value="general">General</TabsTrigger>
+              <TabsTrigger value="general">General</TabsTrigger>*/}
+              <TabsTrigger value="api-keys">API Keys</TabsTrigger>
             </TabsList>
             <Outlet />
           </Tabs>
