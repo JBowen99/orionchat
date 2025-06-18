@@ -255,13 +255,13 @@ export default function ChatSidebar() {
       </SidebarContent>
       <SidebarFooter>
         <div className="flex flex-col border-t w-full p-2">
-          <Link to="/settings/customization">
-            {userLoading ? (
-              <div className="flex items-center gap-2 p-2">
-                <div className="w-6 h-6 bg-muted rounded-full animate-pulse" />
-                <div className="w-20 h-4 bg-muted rounded animate-pulse" />
-              </div>
-            ) : user ? (
+          {userLoading ? (
+            <div className="flex items-center gap-2 p-2">
+              <div className="w-6 h-6 bg-muted rounded-full animate-pulse" />
+              <div className="w-20 h-4 bg-muted rounded animate-pulse" />
+            </div>
+          ) : user ? (
+            <Link to="/settings/customization">
               <div className="flex items-center justify-between p-2">
                 <div className="flex items-center gap-2 min-w-0 flex-1">
                   <User className="w-6 h-6 text-muted-foreground flex-shrink-0" />
@@ -270,19 +270,19 @@ export default function ChatSidebar() {
                   </span>
                 </div>
               </div>
-            ) : (
-              <div className="flex items-center gap-2 p-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => navigate("/login")}
-                  className="w-full"
-                >
-                  Sign In
-                </Button>
-              </div>
-            )}
-          </Link>
+            </Link>
+          ) : (
+            <div className="flex items-center gap-2 p-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate("/login")}
+                className="w-full"
+              >
+                Sign In
+              </Button>
+            </div>
+          )}
         </div>
       </SidebarFooter>
     </Sidebar>
