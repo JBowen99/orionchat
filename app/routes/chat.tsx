@@ -12,6 +12,7 @@ import { useEffect } from "react";
 import { useUser } from "~/contexts/user-context";
 import { Button } from "~/components/ui/button";
 import WelcomeMessage from "~/components/welcome-message";
+import AiContextSidebar from "~/components/ai-context-sidebar";
 
 function ChatContent() {
   const location = useLocation();
@@ -51,7 +52,7 @@ function ChatContent() {
   };
 
   return (
-    <div className="flex flex-col h-screen w-full relative">
+    <div className="flex flex-col h-screen w-full relative chat-background">
       {/* Chat Area */}
       <div
         ref={chatAreaRef}
@@ -87,13 +88,13 @@ export default function Index() {
   return (
     <div className="flex flex-col items-center justify-center h-screen">
       <SidebarProvider>
-        <ChatSidebar />
-        <FloatingButtons />
-        <SidebarInset>
-          <ChatMessageProvider chatId={chatId}>
+        <ChatMessageProvider chatId={chatId}>
+          <ChatSidebar />
+          <FloatingButtons />
+          <SidebarInset>
             <ChatContent />
-          </ChatMessageProvider>
-        </SidebarInset>
+          </SidebarInset>
+        </ChatMessageProvider>
       </SidebarProvider>
     </div>
   );

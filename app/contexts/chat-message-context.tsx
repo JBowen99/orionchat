@@ -29,6 +29,7 @@ interface ChatMessageContextType {
     messageId: string,
     updates: Partial<Message>
   ) => Promise<void>;
+  updateMessageContent: (messageId: string, content: string) => void;
   deleteMessage: (messageId: string) => Promise<void>;
   branchConversation: (targetMessageId: string) => Promise<void>;
   chatId: string | null;
@@ -50,7 +51,7 @@ export const ChatMessageProvider = ({
   chatId,
 }: ChatMessageProviderProps) => {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(false);
   const [syncing, setSyncing] = useState<boolean>(false);
   const [supabase] = useState(() => createClient());
   const navigate = useNavigate();
@@ -76,13 +77,51 @@ export const ChatMessageProvider = ({
 
       if (data) {
         setMessages(data);
-        // Update Dexie cache with fresh data
-        await db.transaction("rw", db.messages, async () => {
-          // Remove existing messages for this chat
-          await db.messages.where("chat_id").equals(chatId).delete();
-          // Add fresh messages
-          await db.messages.bulkAdd(data);
-        });
+        // === OPTIMIZED: Incremental cache update instead of expensive rebuild ===
+        try {
+          // Get existing cached messages for comparison
+          const existingCached = await db.getChatMessages(chatId);
+          const existingIds = new Set(existingCached.map((m) => m.id));
+          const newIds = new Set(data.map((m) => m.id));
+
+          // Only update what's changed
+          const toAdd = data.filter((msg) => !existingIds.has(msg.id));
+          const toDelete = existingCached.filter((msg) => !newIds.has(msg.id));
+          const toUpdate = data.filter((msg) => {
+            const existing = existingCached.find((e) => e.id === msg.id);
+            return (
+              existing &&
+              (existing.content !== msg.content ||
+                JSON.stringify(existing.metadata) !==
+                  JSON.stringify(msg.metadata))
+            );
+          });
+
+          // Perform incremental updates
+          await db.transaction("rw", db.messages, async () => {
+            if (toDelete.length > 0) {
+              await db.messages.bulkDelete(toDelete.map((m) => m.id));
+            }
+            if (toAdd.length > 0) {
+              await db.messages.bulkAdd(toAdd);
+            }
+            if (toUpdate.length > 0) {
+              for (const msg of toUpdate) {
+                await db.messages.update(msg.id, msg);
+              }
+            }
+          });
+        } catch (cacheError) {
+          console.warn(
+            "Cache update failed, falling back to full rebuild:",
+            cacheError
+          );
+          // Fallback to original approach if incremental update fails
+          await db.transaction("rw", db.messages, async () => {
+            await db.messages.where("chat_id").equals(chatId).delete();
+            await db.messages.bulkAdd(data);
+          });
+        }
       }
     } catch (error) {
       console.error("Error refreshing messages:", error);
@@ -144,6 +183,13 @@ export const ChatMessageProvider = ({
       console.error("Error updating message:", error);
       throw error;
     }
+  };
+
+  const updateMessageContent = (messageId: string, content: string) => {
+    // Lightweight UI-only update for streaming performance
+    setMessages((prev) =>
+      prev.map((msg) => (msg.id === messageId ? { ...msg, content } : msg))
+    );
   };
 
   const deleteMessage = async (messageId: string) => {
@@ -279,14 +325,19 @@ export const ChatMessageProvider = ({
         if (cachedMessages.length > 0) {
           setMessages(cachedMessages);
           setLoading(false); // Set loading to false immediately with cached data
+        } else {
+          // Only show loading for conversations without cache
+          setLoading(true);
         }
 
-        // Then sync with Supabase in the background
-        await refreshMessages();
+        // === OPTIMIZED: Non-blocking background sync ===
+        // Don't await - let this run in background
+        refreshMessages().catch((error) => {
+          console.error("Background sync failed:", error);
+        });
       } catch (error) {
         console.error("Error loading messages:", error);
-      } finally {
-        setLoading(false); // Ensure loading is false even if cache was empty
+        setLoading(false);
       }
     };
 
@@ -299,6 +350,7 @@ export const ChatMessageProvider = ({
     refreshMessages,
     addMessage,
     updateMessage,
+    updateMessageContent,
     deleteMessage,
     branchConversation,
     chatId,

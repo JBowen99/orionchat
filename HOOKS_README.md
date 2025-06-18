@@ -4,12 +4,13 @@ This guide explains how to use the three specialized chat hooks in the applicati
 
 ## 📚 Hook Overview
 
-| Hook | Purpose | Use Case |
-|------|---------|----------|
-| `useChat` | Core chat functionality | Send messages, streaming, system prompts |
-| `useRetryMessage` | Retry failed/unwanted responses | Message action buttons, error recovery |
-| `useBranchConversation` | Create conversation branches | Alternative conversation paths |
-| `useShareChat` | Share conversations publicly | Create shareable links with optional expiration |
+| Hook                    | Purpose                           | Use Case                                        |
+| ----------------------- | --------------------------------- | ----------------------------------------------- |
+| `useChat`               | Core chat functionality           | Send messages, streaming, system prompts        |
+| `useRetryMessage`       | Retry failed/unwanted responses   | Message action buttons, error recovery          |
+| `useBranchConversation` | Create conversation branches      | Alternative conversation paths                  |
+| `useShareChat`          | Share conversations publicly      | Create shareable links with optional expiration |
+| `useCopySharedChat`     | Copy shared chats to user account | Import shared conversations as new chats        |
 
 ---
 
@@ -35,7 +36,9 @@ function ChatComponent() {
 
   return (
     <div>
-      {messages.map(msg => <div key={msg.content}>{msg.content}</div>)}
+      {messages.map((msg) => (
+        <div key={msg.content}>{msg.content}</div>
+      ))}
       <button onClick={handleSend} disabled={isLoading}>
         {isLoading ? "Sending..." : "Send"}
       </button>
@@ -64,35 +67,41 @@ const { sendMessage, sendMessages } = useChat({
 });
 
 // Send a complete conversation
-await sendMessages([
-  { role: "user", content: "What's the weather like?" },
-  { role: "assistant", content: "I'd be happy to help, but I need your location." },
-  { role: "user", content: "I'm in San Francisco" }
-], { stream: true });
+await sendMessages(
+  [
+    { role: "user", content: "What's the weather like?" },
+    {
+      role: "assistant",
+      content: "I'd be happy to help, but I need your location.",
+    },
+    { role: "user", content: "I'm in San Francisco" },
+  ],
+  { stream: true }
+);
 ```
 
 ### Options
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `model` | string | `"gemini-2.5-flash-preview-05-20"` | AI model to use |
-| `temperature` | number | `0.7` | Response creativity (0-1) |
-| `maxTokens` | number | `4096` | Maximum response length |
-| `usePersistedMessages` | boolean | `false` | Save to database |
-| `enableSystemPrompts` | boolean | `false` | Include user context |
+| Option                 | Type    | Default                            | Description               |
+| ---------------------- | ------- | ---------------------------------- | ------------------------- |
+| `model`                | string  | `"gemini-2.5-flash-preview-05-20"` | AI model to use           |
+| `temperature`          | number  | `0.7`                              | Response creativity (0-1) |
+| `maxTokens`            | number  | `4096`                             | Maximum response length   |
+| `usePersistedMessages` | boolean | `false`                            | Save to database          |
+| `enableSystemPrompts`  | boolean | `false`                            | Include user context      |
 
 ### Return Values
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `messages` | `ChatMessage[]` | Current conversation |
-| `sendMessage` | function | Send a single message |
-| `sendMessages` | function | Send multiple messages |
-| `isLoading` | boolean | Is request in progress |
-| `error` | string \| null | Last error message |
-| `clearMessages` | function | Clear conversation |
-| `persistedMessages` | `Message[]` | Database messages (if persistence enabled) |
-| `chatId` | string \| null | Current chat ID (if persistence enabled) |
+| Property            | Type            | Description                                |
+| ------------------- | --------------- | ------------------------------------------ |
+| `messages`          | `ChatMessage[]` | Current conversation                       |
+| `sendMessage`       | function        | Send a single message                      |
+| `sendMessages`      | function        | Send multiple messages                     |
+| `isLoading`         | boolean         | Is request in progress                     |
+| `error`             | string \| null  | Last error message                         |
+| `clearMessages`     | function        | Clear conversation                         |
+| `persistedMessages` | `Message[]`     | Database messages (if persistence enabled) |
+| `chatId`            | string \| null  | Current chat ID (if persistence enabled)   |
 
 ---
 
@@ -144,7 +153,6 @@ const { retryMessage, isRetrying } = useRetryMessage({
   },
   onRetryComplete: () => {
     setShowRetryIndicator(false);
-    showSuccessToast("Message retried successfully");
   },
   onRetryError: (error) => {
     showErrorToast(`Retry failed: ${error.message}`);
@@ -311,18 +319,106 @@ const handleSharePermanent = async () => {
 
 ### Share Options
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| Option          | Type   | Default     | Description                         |
+| --------------- | ------ | ----------- | ----------------------------------- |
 | `expiresInDays` | number | `undefined` | Days until share expires (optional) |
 
 ### Return Values
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `shareChat` | function | Create shared chat with optional expiration |
-| `isSharing` | boolean | Is share operation in progress |
-| `shareError` | string \| null | Last share error message |
-| `clearShareError` | function | Clear error state |
+| Property          | Type           | Description                                 |
+| ----------------- | -------------- | ------------------------------------------- |
+| `shareChat`       | function       | Create shared chat with optional expiration |
+| `isSharing`       | boolean        | Is share operation in progress              |
+| `shareError`      | string \| null | Last share error message                    |
+| `clearShareError` | function       | Clear error state                           |
+
+---
+
+## 📋 `useCopySharedChat` - Copy Shared Conversations
+
+**Purpose:** Copy a shared conversation to the current user's account as a new private chat.
+
+### Basic Usage
+
+```typescript
+import { useCopySharedChat } from "~/hooks/use-copy-shared-chat";
+
+function SharedChatPage() {
+  const { copySharedChat, isCopying, copyError } = useCopySharedChat();
+
+  const handleCopyChat = async () => {
+    try {
+      const newChatId = await copySharedChat(sharedChat, messages);
+      console.log("Chat copied successfully:", newChatId);
+    } catch (error) {
+      console.error("Copy failed:", error);
+    }
+  };
+
+  return (
+    <button onClick={handleCopyChat} disabled={isCopying}>
+      {isCopying ? "Copying..." : "Copy to my chats"}
+    </button>
+  );
+}
+```
+
+### Advanced Usage with Callbacks
+
+```typescript
+const { copySharedChat, isCopying, copyError, clearCopyError } =
+  useCopySharedChat({
+    onCopyStart: () => {
+      console.log("Starting to copy shared chat...");
+    },
+    onCopyComplete: (newChatId) => {
+      console.log("Chat copied successfully:", newChatId);
+      toast.success("Conversation copied to your chats!");
+    },
+    onCopyError: (error) => {
+      console.error("Copy failed:", error);
+      toast.error("Failed to copy conversation");
+    },
+  });
+
+// Clear any previous errors
+useEffect(() => {
+  clearCopyError();
+}, []);
+```
+
+### Hook Parameters
+
+- **`sharedChat`** - The shared chat object from the database
+- **`messages`** - Array of messages from the shared chat
+
+### Return Values
+
+- **`copySharedChat(sharedChat, messages)`** - Function to copy the shared chat
+- **`isCopying`** - Boolean indicating if copy operation is in progress
+- **`copyError`** - Error message if copy fails
+- **`clearCopyError()`** - Function to clear error state
+
+### Features
+
+- ✅ Creates a new private chat for the current user
+- ✅ Copies all messages from the shared conversation
+- ✅ Maintains message order and content
+- ✅ Automatically navigates to the new chat
+- ✅ Updates chat list in sidebar
+- ✅ Caches new chat in local storage
+- ✅ Error handling with cleanup on failure
+- ✅ Optimistic UI updates
+
+### Error Handling
+
+The hook includes comprehensive error handling:
+
+- Validates user authentication
+- Ensures messages exist before copying
+- Cleans up created chat if message copying fails
+- Provides detailed error messages
+- Handles caching failures gracefully
 
 ---
 
@@ -345,9 +441,9 @@ function ChatInterface() {
 
   return (
     <div>
-      {messages.map(message => (
-        <MessageComponent 
-          key={message.id} 
+      {messages.map((message) => (
+        <MessageComponent
+          key={message.id}
           message={message}
           onRetry={() => retryMessage(message.id)}
           onBranch={() => branchConversation(message.id)}
@@ -372,27 +468,27 @@ function MessageActions({ messageId, messageRole }) {
   const { shareChat, isSharing } = useShareChat();
 
   // Only show actions for assistant messages
-  if (messageRole !== 'assistant') return null;
+  if (messageRole !== "assistant") return null;
 
   return (
     <div className="message-actions">
-      <button 
+      <button
         onClick={() => retryMessage(messageId)}
         disabled={isRetrying}
         title="Generate a different response"
       >
         🔄 Retry
       </button>
-      
-      <button 
+
+      <button
         onClick={() => branchConversation(messageId)}
         disabled={isBranching}
         title="Create a new conversation from this point"
       >
         🌿 Branch
       </button>
-      
-      <button 
+
+      <button
         onClick={() => shareChat()}
         disabled={isSharing}
         title="Share this conversation"
@@ -409,6 +505,7 @@ function MessageActions({ messageId, messageRole }) {
 ## 🔧 Best Practices
 
 ### 1. **Always Enable Features for Main Chat**
+
 ```typescript
 // ✅ Good - Full featured chat
 const { sendMessage } = useChat({
@@ -421,6 +518,7 @@ const { sendMessage } = useChat();
 ```
 
 ### 2. **Handle Loading States**
+
 ```typescript
 const { isLoading } = useChat();
 const { isRetrying } = useRetryMessage();
@@ -431,6 +529,7 @@ const isAnyActionPending = isLoading || isRetrying || isBranching || isSharing;
 ```
 
 ### 3. **Provide User Feedback**
+
 ```typescript
 const { retryMessage } = useRetryMessage({
   onRetryStart: () => showToast("Retrying message..."),
@@ -440,6 +539,7 @@ const { retryMessage } = useRetryMessage({
 ```
 
 ### 4. **Graceful Error Handling**
+
 ```typescript
 const handleAction = async (actionFn) => {
   try {
@@ -457,9 +557,9 @@ const handleAction = async (actionFn) => {
 ## 🚀 Quick Start
 
 1. **Basic chat** - Use `useChat` with persistence and system prompts
-2. **Add retry** - Use `useRetryMessage` for message actions  
+2. **Add retry** - Use `useRetryMessage` for message actions
 3. **Add branching** - Use `useBranchConversation` for alternative paths
 4. **Add sharing** - Use `useShareChat` to create public links
 5. **Compose together** - Combine all four for full functionality
 
-Each hook is designed to work independently or together, giving you maximum flexibility in building your chat interface! 
+Each hook is designed to work independently or together, giving you maximum flexibility in building your chat interface!

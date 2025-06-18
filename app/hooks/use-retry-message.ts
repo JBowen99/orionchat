@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useChat } from "./use-chat";
 import { useChatMessageContext } from "~/contexts/chat-message-context";
 import { useApiKeys } from "~/contexts/api-keys-context";
@@ -15,7 +15,7 @@ export interface UseRetryMessageOptions {
 }
 
 export interface UseRetryMessageReturn {
-  retryMessage: (messageId: string) => Promise<void>;
+  retryMessage: (messageId: string, options?: { model?: string }) => Promise<void>;
   isRetrying: boolean;
   retryError: string | null;
   clearRetryError: () => void;
@@ -24,9 +24,10 @@ export interface UseRetryMessageReturn {
 export function useRetryMessage(options: UseRetryMessageOptions = {}): UseRetryMessageReturn {
   const [isRetrying, setIsRetrying] = useState(false);
   const [retryError, setRetryError] = useState<string | null>(null);
+  const [currentRetryModel, setCurrentRetryModel] = useState<string | undefined>(undefined);
   
   const { 
-    model,
+    model: defaultModel,
     temperature, 
     maxTokens,
     onRetryStart,
@@ -34,31 +35,32 @@ export function useRetryMessage(options: UseRetryMessageOptions = {}): UseRetryM
     onRetryError,
   } = options;
 
-  // === RETRY LOGIC: Uses main chat hook to ensure consistency ===
+  const { updateMessage, deleteMessage } = useChatMessageContext();
+  const { apiKeys } = useApiKeys();
+  const { messages: persistedMessages, chatId } = useChatMessageContext();
+
+  // Create chat hook with dynamic model support
   const chatHook = useChat({
-    model,
+    model: currentRetryModel || defaultModel || "gemini-2.5-flash-preview-05-20",
     temperature,
     maxTokens,
-    usePersistedMessages: true,  // Retry always uses persistence
-    enableSystemPrompts: true,   // Retry uses same system prompting as regular messages
+    usePersistedMessages: true,
+    enableSystemPrompts: true,
     onError: (error) => {
       setRetryError(error.message);
+      setIsRetrying(false);
       if (onRetryError) {
         onRetryError(error);
       }
     },
   });
 
-  const { messages, persistedMessages, chatId } = chatHook;
-  const { updateMessage, deleteMessage } = useChatMessageContext();
-  const { apiKeys } = useApiKeys();
-
   const clearRetryError = useCallback(() => {
     setRetryError(null);
   }, []);
 
   const retryMessage = useCallback(
-    async (targetMessageId: string) => {
+    async (targetMessageId: string, retryOptions: { model?: string } = {}) => {
       if (!chatId) {
         throw new Error("No chat ID available for retry");
       }
@@ -81,22 +83,19 @@ export function useRetryMessage(options: UseRetryMessageOptions = {}): UseRetryM
           throw new Error("Target message not found");
         }
 
-        // === RETRY LOGIC: Extract model and parameters from target message ===
+        // === RETRY LOGIC: Determine model to use ===
         const metadata = targetMessage.metadata as {
           model?: string;
           temperature?: number;
           maxTokens?: number;
         } | null;
 
-        const messageModel = metadata?.model || model;
-        if (!messageModel) {
-          throw new Error("Cannot retry: No model information found in message");
-        }
+        const modelToUse = retryOptions.model || defaultModel || metadata?.model || "gemini-2.5-flash-preview-05-20";
 
         // Validate model configuration
-        const modelConfig = getModelById(messageModel);
+        const modelConfig = getModelById(modelToUse);
         if (!modelConfig) {
-          throw new Error(`Model ${messageModel} not found`);
+          throw new Error(`Model ${modelToUse} not found`);
         }
 
         // Check if we have the required API key
@@ -115,47 +114,52 @@ export function useRetryMessage(options: UseRetryMessageOptions = {}): UseRetryM
           );
         }
 
+        // Set the model for the retry
+        setCurrentRetryModel(modelToUse);
+
         // === RETRY LOGIC: Find the target message index ===
         const targetIndex = persistedMessages.findIndex((m) => m.id === targetMessageId);
         if (targetIndex === -1) {
           throw new Error("Target message not found in conversation");
         }
 
-        // === RETRY LOGIC: Delete all messages after the target message (including the target) ===
-        const messagesToDelete = persistedMessages.slice(targetIndex);
+        // === RETRY LOGIC: Handle deletion based on message type ===
+        let deletionStartIndex: number;
+        let conversationHistoryEndIndex: number;
 
-        // Delete messages in reverse order (newest first) to maintain consistency
-        for (let i = messagesToDelete.length - 1; i >= 0; i--) {
-          const messageToDelete = messagesToDelete[i];
-          await deleteMessage(messageToDelete.id);
+        if (targetMessage.role === "user") {
+          conversationHistoryEndIndex = targetIndex + 1;
+          deletionStartIndex = targetIndex + 1;
+          while (deletionStartIndex < persistedMessages.length && persistedMessages[deletionStartIndex].role !== "assistant") {
+            deletionStartIndex++;
+          }
+        } else {
+          deletionStartIndex = targetIndex;
+          conversationHistoryEndIndex = targetIndex;
         }
 
-        // === RETRY LOGIC: Get conversation history up to the parent message ===
+        // === RETRY LOGIC: Delete messages from the determined start point ===
+        if (deletionStartIndex < persistedMessages.length) {
+          const messagesToDelete = persistedMessages.slice(deletionStartIndex);
+          
+          for (let i = messagesToDelete.length - 1; i >= 0; i--) {
+            const messageToDelete = messagesToDelete[i];
+            await deleteMessage(messageToDelete.id);
+          }
+        }
+
+        // === RETRY LOGIC: Get conversation history up to the determined point ===
         const conversationHistory: ChatMessage[] = persistedMessages
-          .slice(0, targetIndex)
+          .slice(0, conversationHistoryEndIndex)
           .map((msg) => ({
             role: msg.role as "system" | "user" | "assistant",
             content: msg.content || "",
           }));
 
-        // === RETRY LOGIC: Find the last user message to retry ===
-        let lastUserMessage: ChatMessage | null = null;
-        for (let i = conversationHistory.length - 1; i >= 0; i--) {
-          if (conversationHistory[i].role === "user") {
-            lastUserMessage = conversationHistory[i];
-            break;
-          }
-        }
-
-        if (!lastUserMessage) {
-          throw new Error("No user message found to retry");
-        }
-
-        // === RETRY LOGIC: Use main chat hook to resend the message ===
-        // This ensures retry goes through the same system prompting, persistence, etc.
-        const fullConversationHistory = [...conversationHistory, lastUserMessage];
-        await chatHook.sendMessages(fullConversationHistory, { 
-          stream: true 
+        // === RETRY LOGIC: Use chat hook with selected model to resend the message ===
+        await chatHook.sendMessages(conversationHistory, { 
+          stream: true,
+          chatId 
         });
 
         if (onRetryComplete) {
@@ -174,12 +178,13 @@ export function useRetryMessage(options: UseRetryMessageOptions = {}): UseRetryM
         throw error;
       } finally {
         setIsRetrying(false);
+        setCurrentRetryModel(undefined);
       }
     },
     [
       chatId,
       persistedMessages,
-      model,
+      defaultModel,
       temperature,
       maxTokens,
       chatHook,
@@ -194,7 +199,7 @@ export function useRetryMessage(options: UseRetryMessageOptions = {}): UseRetryM
 
   return {
     retryMessage,
-    isRetrying: isRetrying || chatHook.isLoading, // Include main chat loading state
+    isRetrying: isRetrying || chatHook.isLoading,
     retryError,
     clearRetryError,
   };

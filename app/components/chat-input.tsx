@@ -46,12 +46,7 @@ export default function ChatInput({
   const { refreshChats } = useChatContext();
 
   // Use the useChat hook with persistence enabled
-  const {
-    isLoading,
-    error,
-    sendMessage,
-    clearError,
-  } = useChat({
+  const { isLoading, error, sendMessage, clearError } = useChat({
     model: selectedModel,
     usePersistedMessages: true,
     enableSystemPrompts: true,
@@ -122,11 +117,38 @@ export default function ChatInput({
         clearError();
       }
 
+      // Ensure we have a valid chatId before sending
+      if (!currentChatId) {
+        throw new Error(
+          "No chat ID available after chat creation. Please try again."
+        );
+      }
+
       // Send the message using the hook
-      await sendMessage(messageContent);
-      
+      await sendMessage(messageContent, {
+        model: selectedModel,
+        chatId: currentChatId,
+      });
     } catch (err) {
       console.error("Error sending message:", err);
+
+      // Restore the message content in the textarea if sending failed
+      if (textareaRef.current && !textareaRef.current.value.trim()) {
+        textareaRef.current.value = messageContent;
+        textareaRef.current.style.height = "auto";
+        textareaRef.current.style.height =
+          textareaRef.current.scrollHeight + "px";
+      }
+
+      // Show specific error message based on error type
+      if (err instanceof Error) {
+        if (err.message.includes("chat ID")) {
+          console.error("Chat creation issue:", err.message);
+          // The useChat hook will handle the error display
+        } else {
+          console.error("Message sending failed:", err.message);
+        }
+      }
       // Error handling is now managed by the useChat hook
     }
   }, [
@@ -209,7 +231,7 @@ export default function ChatInput({
 
             <Button
               size="icon"
-              className="w-8 h-8 ml-auto bg-primary hover:bg-primary/90 "
+              className="w-8 h-8 ml-auto bg-primary hover:bg-primary/80 "
               onClick={handleSendMessage}
               disabled={!canSend}
             >

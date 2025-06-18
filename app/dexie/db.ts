@@ -62,6 +62,35 @@ class AppDatabase extends Dexie {
   }
 
   /**
+   * === PERFORMANCE OPTIMIZATION ===
+   * Prefetch messages for multiple chats to enable instant switching
+   */
+  async prefetchChatMessages(chatIds: string[]): Promise<Record<string, Message[]>> {
+    const result: Record<string, Message[]> = {};
+    
+    try {
+      // Use a single IndexedDB query to fetch all messages for multiple chats
+      const allMessages = await this.messages
+        .where('chat_id')
+        .anyOf(chatIds)
+        .sortBy('created_at');
+
+      // Group messages by chat_id
+      for (const message of allMessages) {
+        if (!result[message.chat_id]) {
+          result[message.chat_id] = [];
+        }
+        result[message.chat_id].push(message);
+      }
+      
+      return result;
+    } catch (error) {
+      console.warn('Prefetch failed:', error);
+      return {};
+    }
+  }
+
+  /**
    * Get user's hats from cache
    */
   async getUserHats(userId?: string): Promise<Hat[]> {

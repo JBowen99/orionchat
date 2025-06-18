@@ -19,6 +19,7 @@ interface ChatContextType {
   refreshChats: () => Promise<void>;
   togglePin: (chatId: string) => Promise<void>;
   deleteChat: (chatId: string) => Promise<void>;
+  renameChat: (chatId: string, newTitle: string) => Promise<void>;
   selectedChatId?: string;
   loading: boolean;
   syncing: boolean; // Add syncing state to show background sync status
@@ -123,6 +124,43 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const renameChat = async (chatId: string, newTitle: string) => {
+    try {
+      // Find the chat in current state
+      const chat = chats.find((c) => c.id === chatId);
+      if (!chat) return;
+
+      const oldTitle = chat.title;
+
+      // Optimistically update local state
+      setChats((prevChats) =>
+        prevChats.map((c) => (c.id === chatId ? { ...c, title: newTitle } : c))
+      );
+
+      // Update Supabase
+      const { error } = await supabase
+        .from("chats")
+        .update({ title: newTitle })
+        .eq("id", chatId);
+
+      if (error) {
+        console.error("Error renaming chat:", error);
+        // Revert optimistic update on error
+        setChats((prevChats) =>
+          prevChats.map((c) =>
+            c.id === chatId ? { ...c, title: oldTitle } : c
+          )
+        );
+        return;
+      }
+
+      // Update Dexie cache
+      await db.chats.update(chatId, { title: newTitle });
+    } catch (error) {
+      console.error("Error renaming chat:", error);
+    }
+  };
+
   useEffect(() => {
     const loadChats = async () => {
       try {
@@ -155,6 +193,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
     refreshChats,
     togglePin,
     deleteChat,
+    renameChat,
     selectedChatId,
     loading,
     syncing,

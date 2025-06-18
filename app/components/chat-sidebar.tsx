@@ -8,6 +8,7 @@ import {
   User,
   LogOut,
   Settings,
+  ImagePlus,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import {
@@ -194,22 +195,32 @@ export default function ChatSidebar() {
               size="icon"
               className="h-8 w-8 transition-all duration-200 ease-in-out hover:scale-105"
             >
-              <Link to="/settings">
+              <Link to="/settings/customization">
                 <Settings className="w-4 h-4" />
               </Link>
             </Button>
           </div>
         </div>
         <div className="flex flex-col items-center gap-2 px-2 pt-2">
-          <Button
-            variant="ghost"
-            className="w-full h-8 new-chat-button"
-            onClick={handleNewChat}
-            disabled={creatingChat}
-          >
-            <PlusIcon className="w-4 h-4 mr-2" />
-            {creatingChat ? "Creating..." : "New Chat"}
-          </Button>
+          <div className="flex flex-row items-center justify-center gap-2 w-full ">
+            <Button
+              variant="ghost"
+              className="flex-grow h-8 new-chat-button"
+              onClick={handleNewChat}
+              disabled={creatingChat}
+            >
+              <PlusIcon className="w-4 h-4 mr-2" />
+              {creatingChat ? "Creating..." : "New Chat"}
+            </Button>
+            <Button
+              variant="ghost"
+              className="flex-shrink-0 h-8 new-chat-button"
+              onClick={handleNewChat}
+              disabled={creatingChat}
+            >
+              <ImagePlus className="w-4 h-4" />
+            </Button>
+          </div>
           <div className="relative flex flex-row items-center justify-center">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
@@ -244,7 +255,7 @@ export default function ChatSidebar() {
       </SidebarContent>
       <SidebarFooter>
         <div className="flex flex-col border-t w-full p-2">
-          <Link to="/settings">
+          <Link to="/settings/customization">
             {userLoading ? (
               <div className="flex items-center gap-2 p-2">
                 <div className="w-6 h-6 bg-muted rounded-full animate-pulse" />
@@ -253,7 +264,7 @@ export default function ChatSidebar() {
             ) : user ? (
               <div className="flex items-center justify-between p-2">
                 <div className="flex items-center gap-2 min-w-0 flex-1">
-                  <User className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                  <User className="w-6 h-6 text-muted-foreground flex-shrink-0" />
                   <span className="text-sm truncate">
                     {user.user_metadata?.full_name || user.email}
                   </span>

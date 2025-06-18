@@ -1,12 +1,29 @@
-import { useParams, useLoaderData, type LoaderFunctionArgs, Link, type ClientLoaderFunctionArgs, isRouteErrorResponse, useRouteError } from "react-router";
+import {
+  useParams,
+  useLoaderData,
+  type LoaderFunctionArgs,
+  Link,
+  type ClientLoaderFunctionArgs,
+  isRouteErrorResponse,
+  useRouteError,
+} from "react-router";
 import { createClient } from "~/lib/server";
 import { useUser } from "~/contexts/user-context";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
-import { AlertTriangle, LogIn, MessageCircle, User, Bot, Home } from "lucide-react";
+import {
+  AlertTriangle,
+  LogIn,
+  MessageCircle,
+  User,
+  Bot,
+  Home,
+  Copy,
+} from "lucide-react";
 import { Badge } from "~/components/ui/badge";
 import { MarkdownRenderer } from "~/components/markdown-renderer";
+import { useCopySharedChat } from "~/hooks/use-copy-shared-chat";
 import type { Tables } from "database.types";
 
 type SharedChat = Tables<"shared_chats">;
@@ -28,7 +45,7 @@ interface SharedChatData {
 
 export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   const { chatid } = params;
-  
+
   if (!chatid) {
     throw new Response("Chat ID is required", { status: 400 });
   }
@@ -47,7 +64,8 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   }
 
   // Check if expired
-  const isExpired = sharedChat.expires_at && new Date(sharedChat.expires_at) < new Date();
+  const isExpired =
+    sharedChat.expires_at && new Date(sharedChat.expires_at) < new Date();
 
   if (isExpired) {
     return {
@@ -81,10 +99,9 @@ export function ErrorBoundary() {
               {error.status === 404 ? "Chat Not Found" : "Something went wrong"}
             </h3>
             <p className="text-muted-foreground mb-4">
-              {error.status === 404 
+              {error.status === 404
                 ? "The shared conversation you're looking for doesn't exist or has been removed."
-                : "There was an error loading this shared conversation. Please try again later."
-              }
+                : "There was an error loading this shared conversation. Please try again later."}
             </p>
             <Button asChild>
               <Link to="/">
@@ -125,10 +142,7 @@ function SimpleChatBubbleUser({ message }: { message: SharedMessage }) {
     <div className="flex gap-3 justify-end">
       <div className="flex gap-3 max-w-[80%] flex-row-reverse">
         <div className="flex items-start gap-2">
-          <div className="flex-shrink-0 mt-1">
-            <User className="h-6 w-6 text-muted-foreground" />
-          </div>
-          <div className="rounded-lg p-3 bg-blue-500 text-white">
+          <div className="rounded-lg p-3 user-chat-bubble">
             <div className="whitespace-pre-wrap text-sm">
               {message.content || "No content"}
             </div>
@@ -140,7 +154,10 @@ function SimpleChatBubbleUser({ message }: { message: SharedMessage }) {
 }
 
 function SimpleChatBubbleAssistant({ message }: { message: SharedMessage }) {
-  const metadata = message.metadata as { model?: string; error?: string } | null;
+  const metadata = message.metadata as {
+    model?: string;
+    error?: string;
+  } | null;
   const model = metadata?.model || "AI Assistant";
   const isError = message.type === "error" || !!metadata?.error;
 
@@ -148,32 +165,31 @@ function SimpleChatBubbleAssistant({ message }: { message: SharedMessage }) {
     <div className="flex gap-3 justify-start">
       <div className="flex gap-3 max-w-[80%] flex-row">
         <div className="flex items-start gap-2">
-          <div className="flex-shrink-0 mt-1">
-            <Bot className="h-6 w-6 text-muted-foreground" />
-          </div>
           <div className="flex flex-col">
-            <div className={`rounded-lg p-3 ${
-              isError 
-                ? "bg-red-50 border border-red-200 text-red-800" 
-                : "bg-gray-100 text-gray-900"
-            }`}>
+            <div
+              className={`rounded-lg p-3 ${
+                isError
+                  ? "bg-red-50 border border-red-200 text-red-800"
+                  : "chat-bubble-assistant"
+              }`}
+            >
               {isError ? (
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="h-4 w-4" />
-                  <span className="text-sm">There was an error generating this response</span>
+                  <span className="text-sm">
+                    There was an error generating this response
+                  </span>
                 </div>
               ) : message.content ? (
-                <MarkdownRenderer 
-                  content={message.content} 
+                <MarkdownRenderer
+                  content={message.content}
                   className="text-sm [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
                 />
               ) : (
                 <span className="text-sm italic">No content</span>
               )}
             </div>
-            <div className="mt-1 text-xs text-muted-foreground">
-              {model}
-            </div>
+            <div className="mt-1 text-xs text-muted-foreground">{model}</div>
           </div>
         </div>
       </div>
@@ -182,8 +198,19 @@ function SimpleChatBubbleAssistant({ message }: { message: SharedMessage }) {
 }
 
 export default function SharedChatPage() {
-  const { sharedChat, messages, isExpired } = useLoaderData<typeof loader>() as SharedChatData;
+  const { sharedChat, messages, isExpired } = useLoaderData<
+    typeof loader
+  >() as SharedChatData;
   const { user, loading: userLoading } = useUser();
+  const { copySharedChat, isCopying } = useCopySharedChat();
+
+  const handleCopyChat = async () => {
+    try {
+      await copySharedChat(sharedChat, messages);
+    } catch (error) {
+      console.error("Failed to copy shared chat:", error);
+    }
+  };
 
   if (isExpired) {
     return (
@@ -208,7 +235,7 @@ export default function SharedChatPage() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-background">
+    <div className="h-screen flex flex-col chat-background">
       {/* Sticky Header */}
       <div className="flex-shrink-0 border-b bg-card">
         <div className="max-w-4xl mx-auto px-6 py-4">
@@ -222,9 +249,7 @@ export default function SharedChatPage() {
                 </p>
               </div>
             </div>
-            <Badge variant="secondary">
-              Shared
-            </Badge>
+            <Badge variant="secondary">Shared</Badge>
           </div>
         </div>
       </div>
@@ -269,17 +294,32 @@ export default function SharedChatPage() {
               </div>
             ) : user ? (
               <>
-                <Button asChild size="lg" className="flex-1 sm:flex-initial">
-                  <Link to="/chat">
-                    <MessageCircle className="mr-2 h-4 w-4" />
-                    Continue the conversation
-                  </Link>
-                </Button>
-                <Button asChild variant="outline" size="lg" className="flex-1 sm:flex-initial">
-                  <Link to="/chat">
-                    Go to your chats
-                  </Link>
-                </Button>
+                <div className="flex flex-row gap-4 justify-center items-center">
+                  <Button
+                    onClick={handleCopyChat}
+                    disabled={isCopying}
+                    variant="default"
+                    size="lg"
+                    className="flex-1 sm:flex-initial"
+                  >
+                    <Copy className="mr-2 h-4 w-4" />
+                    {isCopying
+                      ? "Copying..."
+                      : "Copy & Continue this conversation"}
+                  </Button>
+                  <span className="text-muted-foreground text-sm">
+                    {" "}
+                    - or -{" "}
+                  </span>
+                  <Button
+                    asChild
+                    variant="outline"
+                    size="lg"
+                    className="flex-1 sm:flex-initial"
+                  >
+                    <Link to="/chat">Go to your chats</Link>
+                  </Button>
+                </div>
               </>
             ) : (
               <>
@@ -289,20 +329,22 @@ export default function SharedChatPage() {
                     Login to continue the conversation
                   </Link>
                 </Button>
-                <Button asChild variant="outline" size="lg" className="flex-1 sm:flex-initial">
-                  <Link to="/sign-up">
-                    Sign up for free
-                  </Link>
+                <Button
+                  asChild
+                  variant="outline"
+                  size="lg"
+                  className="flex-1 sm:flex-initial"
+                >
+                  <Link to="/sign-up">Sign up for free</Link>
                 </Button>
               </>
             )}
           </div>
           <div className="mt-4 text-center">
             <p className="text-sm text-muted-foreground">
-              {user 
+              {user
                 ? "You can copy this conversation to your account and continue chatting."
-                : "Create an account to continue this conversation and save your chat history."
-              }
+                : "Create an account to continue this conversation and save your chat history."}
             </p>
           </div>
         </div>

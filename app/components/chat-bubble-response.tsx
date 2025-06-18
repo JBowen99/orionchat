@@ -52,8 +52,7 @@ export function ChatBubbleResponse({
 
   // Use the retry hook instead of context function
   const { retryMessage, isRetrying } = useRetryMessage({
-    onRetryComplete: () => {
-    },
+    onRetryComplete: () => {},
     onRetryError: (error) => {
       console.error("Failed to retry response:", error);
       toast.error("Failed to retry response. Please try again.");
@@ -154,7 +153,10 @@ export function ChatBubbleResponse({
 
   const handleShareConfirm = async () => {
     try {
-      const expiresInDays = selectedExpiration === "never" ? undefined : parseInt(selectedExpiration);
+      const expiresInDays =
+        selectedExpiration === "never"
+          ? undefined
+          : parseInt(selectedExpiration);
       await shareChat({ expiresInDays });
     } catch (error) {
       // Error handling is done by the hook's onShareError callback

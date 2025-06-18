@@ -12,7 +12,7 @@ export default function Settings() {
   const params = useParams();
 
   // Get current tab from URL params, default to 'account'
-  const currentTab = params.category || "account";
+  const currentTab = params.category || "customization";
 
   const handleSignOut = async () => {
     try {
