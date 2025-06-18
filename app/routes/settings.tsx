@@ -28,7 +28,7 @@ export default function Settings() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-start w-full max-w-6xl mx-auto">
+    <div className="flex flex-col items-center justify-start w-full min-h-screen max-w-6xl mx-auto">
       {/* Header */}
       <div className="flex flex-row items-center justify-center my-8 gap-2 w-full">
         <div className="flex flex-row items-center gap-2">

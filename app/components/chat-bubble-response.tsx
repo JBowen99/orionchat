@@ -1,30 +1,41 @@
-import { Button } from "~/components/ui/button";
-import { Alert, AlertTitle, AlertDescription } from "~/components/ui/alert";
+import React, { useState } from "react";
+import { MarkdownRenderer } from "./markdown-renderer";
+import { Button } from "./ui/button";
+import {
+  Copy,
+  MoreHorizontal,
+  ThumbsUp,
+  ThumbsDown,
+  ChevronRight,
+  XCircle,
+  AlertTriangle,
+  RotateCcw,
+  GitBranch,
+  Edit,
+  Loader2,
+  Split,
+  Share,
+} from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
+
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
+import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from "~/components/ui/collapsible";
-import {
-  Tooltip,
-  TooltipTrigger,
-  TooltipContent,
-} from "~/components/ui/tooltip";
-import {
-  Copy,
-  RotateCcw,
-  Share,
-  Split,
-  XCircle,
-  ChevronRight,
-  AlertTriangle,
-  Loader2,
-} from "lucide-react";
-import { useState } from "react";
-import type { Tables } from "database.types";
+} from "./ui/collapsible";
 import { toast } from "sonner";
-import { MarkdownRenderer } from "~/components/markdown-renderer";
-import { useChatMessageContext } from "~/contexts/chat-message-context";
+import { useRetryMessage } from "~/hooks/use-retry-message";
+import { useBranchConversation } from "~/hooks/use-branch-conversation";
+import { useShareChat } from "~/hooks/use-share-chat";
+import { ShareExpirationModal } from "./share-expiration-modal";
+import type { Tables } from "database.types";
 
 interface ChatBubbleResponseProps {
   message: Tables<"messages">;
@@ -36,9 +47,42 @@ export function ChatBubbleResponse({
   isGenerating = false,
 }: ChatBubbleResponseProps) {
   const [isHovered, setIsHovered] = useState(false);
-  const [isRetrying, setIsRetrying] = useState(false);
-  const [isBranching, setIsBranching] = useState(false);
-  const { retryResponse, branchConversation } = useChatMessageContext();
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [selectedExpiration, setSelectedExpiration] = useState("7");
+
+  // Use the retry hook instead of context function
+  const { retryMessage, isRetrying } = useRetryMessage({
+    onRetryComplete: () => {
+    },
+    onRetryError: (error) => {
+      console.error("Failed to retry response:", error);
+      toast.error("Failed to retry response. Please try again.");
+    },
+  });
+
+  // Use the branch hook instead of context function
+  const { branchConversation, isBranching } = useBranchConversation({
+    onBranchComplete: (newChatId) => {
+      toast.success("Created branch conversation");
+    },
+    onBranchError: (error) => {
+      console.error("Failed to branch conversation:", error);
+      toast.error("Failed to branch conversation. Please try again.");
+    },
+  });
+
+  // Use the share hook
+  const { shareChat, isSharing } = useShareChat({
+    onShareComplete: (sharedChatId, shareUrl) => {
+      navigator.clipboard.writeText(shareUrl);
+      toast.success("Share link copied to clipboard!");
+      setShowShareModal(false);
+    },
+    onShareError: (error) => {
+      console.error("Failed to share conversation:", error);
+      toast.error("Failed to share conversation. Please try again.");
+    },
+  });
 
   // Extract model and streaming info from metadata
   const metadata = message.metadata as {
@@ -80,35 +124,42 @@ export function ChatBubbleResponse({
   const handleRetry = async () => {
     if (isRetrying) return;
 
-    setIsRetrying(true);
     try {
-      await retryResponse(message.id);
+      await retryMessage(message.id);
     } catch (error) {
-      console.error("Failed to retry response:", error);
-      toast.error("Failed to retry response. Please try again.");
-    } finally {
-      setIsRetrying(false);
+      // Error handling is done by the hook's onRetryError callback
+      console.error("Retry failed:", error);
     }
   };
 
   const handleBranch = async () => {
     if (isBranching) return;
 
-    setIsBranching(true);
     try {
       await branchConversation(message.id);
-      toast.success("Conversation branched successfully");
     } catch (error) {
-      console.error("Failed to branch conversation:", error);
-      toast.error("Failed to branch conversation. Please try again.");
-    } finally {
-      setIsBranching(false);
+      // Error handling is done by the hook's onBranchError callback
+      console.error("Branch failed:", error);
     }
   };
 
   const handleEdit = () => {
     // TODO: Implement edit functionality
     console.log("Edit message:", message.id);
+  };
+
+  const handleShareClick = () => {
+    setShowShareModal(true);
+  };
+
+  const handleShareConfirm = async () => {
+    try {
+      const expiresInDays = selectedExpiration === "never" ? undefined : parseInt(selectedExpiration);
+      await shareChat({ expiresInDays });
+    } catch (error) {
+      // Error handling is done by the hook's onShareError callback
+      console.error("Share failed:", error);
+    }
   };
 
   const renderContent = () => {
@@ -228,25 +279,7 @@ export function ChatBubbleResponse({
                     <Copy className="h-3 w-3" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>
-                  <p>Copy response</p>
-                </TooltipContent>
-              </Tooltip>
-
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 w-7 p-0"
-                    onClick={handleEdit}
-                  >
-                    <Share className="h-3 w-3" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Share response</p>
-                </TooltipContent>
+                <TooltipContent>Copy</TooltipContent>
               </Tooltip>
 
               <Tooltip>
@@ -266,7 +299,7 @@ export function ChatBubbleResponse({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>{isRetrying ? "Retrying..." : "Retry response"}</p>
+                  {isRetrying ? "Retrying..." : "Retry"}
                 </TooltipContent>
               </Tooltip>
 
@@ -287,15 +320,48 @@ export function ChatBubbleResponse({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>{isBranching ? "Branching..." : "Branch conversation"}</p>
+                  {isBranching ? "Branching..." : "Branch"}
                 </TooltipContent>
               </Tooltip>
 
-              <span className="text-xs">{isError ? "Error" : model}</span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    onClick={handleShareClick}
+                    disabled={isSharing}
+                  >
+                    {isSharing ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Share className="h-3 w-3" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {isSharing ? "Sharing..." : "Share This Conversation"}
+                </TooltipContent>
+              </Tooltip>
+
+              <span className="text-xs text-muted-foreground/60 ml-2">
+                {model}
+              </span>
             </div>
           )}
         </div>
       </div>
+
+      {/* Share Modal */}
+      <ShareExpirationModal
+        open={showShareModal}
+        onOpenChange={setShowShareModal}
+        selectedExpiration={selectedExpiration}
+        onExpirationChange={setSelectedExpiration}
+        onConfirm={handleShareConfirm}
+        isSharing={isSharing}
+      />
     </div>
   );
 }

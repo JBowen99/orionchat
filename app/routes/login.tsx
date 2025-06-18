@@ -31,7 +31,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   // Update this route to redirect to an authenticated route. The user already has an active session.
-  return redirect('/protected', { headers })
+  return redirect('/chat', { headers })
 }
 
 export default function Login() {

@@ -21,6 +21,7 @@ import { useNavigate } from "react-router";
 import { createClient } from "~/lib/client";
 import { useUser } from "~/contexts/user-context";
 import { useChatContext } from "~/contexts/chat-list-context";
+import { useChat } from "~/hooks/use-chat";
 
 interface ChatInputProps {
   disabled?: boolean;
@@ -36,19 +37,30 @@ export default function ChatInput({
   onScrollToBottom,
 }: ChatInputProps) {
   const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_MODEL_ID);
-  const [isLoading, setIsLoading] = useState(false);
-  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(
-    null
-  );
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const navigate = useNavigate();
   const supabase = createClient();
   const { user } = useUser();
 
-  const { addMessage, chatId, messages, updateMessage } =
-    useChatMessageContext();
-  const { apiKeys } = useApiKeys();
+  const { chatId } = useChatMessageContext();
   const { refreshChats } = useChatContext();
+
+  // Use the useChat hook with persistence enabled
+  const {
+    isLoading,
+    error,
+    sendMessage,
+    clearError,
+  } = useChat({
+    model: selectedModel,
+    usePersistedMessages: true,
+    enableSystemPrompts: true,
+    temperature: 0.7,
+    maxTokens: 4096,
+    onError: (error) => {
+      console.error("Chat error:", error);
+    },
+  });
 
   // Auto-resize textarea on input
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -67,7 +79,6 @@ export default function ChatInput({
       textareaRef.current.value = "";
       textareaRef.current.style.height = "auto";
     }
-    setIsLoading(true);
 
     try {
       let currentChatId = chatId;
@@ -75,21 +86,7 @@ export default function ChatInput({
       // If no chatId, create a new chat first
       if (!currentChatId) {
         if (!user) {
-          // Create error message for sign-in requirement
-          const errorMessageId = uuidv4();
-          const errorMessage = {
-            id: errorMessageId,
-            chat_id: "temp", // Temporary ID since we don't have a chat yet
-            role: "assistant" as const,
-            content: "Please sign in to start a chat",
-            type: "error",
-            created_at: new Date().toISOString(),
-            parent_message_id: null,
-            metadata: { error: "Authentication required" },
-          };
-          await addMessage(errorMessage);
-          setIsLoading(false);
-          return;
+          throw new Error("Please sign in to start a chat");
         }
 
         const { data: newChat, error: chatError } = await supabase
@@ -106,21 +103,7 @@ export default function ChatInput({
 
         if (chatError || !newChat) {
           console.error("Error creating new chat:", chatError);
-          // Create error message for chat creation failure
-          const errorMessageId = uuidv4();
-          const errorMessage = {
-            id: errorMessageId,
-            chat_id: "temp",
-            role: "assistant" as const,
-            content: "Failed to create new chat. Please try again.",
-            type: "error",
-            created_at: new Date().toISOString(),
-            parent_message_id: null,
-            metadata: { error: "Chat creation failed" },
-          };
-          await addMessage(errorMessage);
-          setIsLoading(false);
-          return;
+          throw new Error("Failed to create new chat. Please try again.");
         }
 
         currentChatId = newChat.id;
@@ -132,51 +115,19 @@ export default function ChatInput({
 
         // Wait for navigation and context to update
         await new Promise((resolve) => setTimeout(resolve, 200));
-
-        // Send the message after navigation is complete
-        await sendMessageToChat(newChat.id, messageContent);
-        return;
       }
 
-      // If we already have a chatId, send the message directly
-      if (currentChatId) {
-        await sendMessageToChat(currentChatId, messageContent);
-      } else {
-        // Create error message for no chat available
-        const errorMessageId = uuidv4();
-        const errorMessage = {
-          id: errorMessageId,
-          chat_id: chatId || "temp",
-          role: "assistant" as const,
-          content: "No chat available. Please try refreshing the page.",
-          type: "error",
-          created_at: new Date().toISOString(),
-          parent_message_id: null,
-          metadata: { error: "No chat available" },
-        };
-        await addMessage(errorMessage);
-        setIsLoading(false);
+      // Clear any previous errors
+      if (error) {
+        clearError();
       }
+
+      // Send the message using the hook
+      await sendMessage(messageContent);
+      
     } catch (err) {
       console.error("Error sending message:", err);
-      const errorMessage =
-        err instanceof Error ? err.message : "Failed to send message";
-
-      // Create error message in chat
-      const errorMessageId = uuidv4();
-      const errorMessageObj = {
-        id: errorMessageId,
-        chat_id: chatId || "temp",
-        role: "assistant" as const,
-        content: errorMessage,
-        type: "error",
-        created_at: new Date().toISOString(),
-        parent_message_id: null,
-        metadata: { error: errorMessage },
-      };
-      await addMessage(errorMessageObj);
-    } finally {
-      setIsLoading(false);
+      // Error handling is now managed by the useChat hook
     }
   }, [
     isLoading,
@@ -186,184 +137,10 @@ export default function ChatInput({
     supabase,
     user,
     refreshChats,
-    addMessage,
+    sendMessage,
+    error,
+    clearError,
   ]);
-
-  const sendMessageToChat = useCallback(
-    async (currentChatId: string, messageContent: string) => {
-      let userMessageId: string | null = null;
-
-      try {
-        // Create user message
-        userMessageId = uuidv4();
-        const userMessage = {
-          id: userMessageId,
-          chat_id: currentChatId,
-          role: "user" as const,
-          content: messageContent,
-          type: "text",
-          created_at: new Date().toISOString(),
-          parent_message_id: null,
-          metadata: null,
-        };
-
-        // Add user message to context (this will cache and save to Supabase)
-        await addMessage(userMessage);
-
-        // Prepare API keys for the service
-        const apiKeysForService = Object.entries(apiKeys).reduce(
-          (acc, [provider, keyEntry]) => {
-            acc[provider as keyof typeof apiKeys] = keyEntry?.key || null;
-            return acc;
-          },
-          {} as Record<keyof typeof apiKeys, string | null>
-        );
-
-        // Get model configuration
-        const modelConfig = getModelById(selectedModel);
-        if (!modelConfig) {
-          throw new Error(`Model ${selectedModel} not found`);
-        }
-
-        // Check if we have the required API key
-        const requiredApiKey = apiKeysForService[modelConfig.provider];
-        if (!requiredApiKey) {
-          throw new Error(
-            `No API key found for ${modelConfig.provider}. Please add an API key in Settings.`
-          );
-        }
-
-        // Prepare conversation history - convert database messages to chat format
-        const conversationHistory: ChatMessage[] = [
-          ...messages.map((msg) => ({
-            role: msg.role as "system" | "user" | "assistant",
-            content: msg.content || "",
-          })),
-          { role: "user" as const, content: messageContent },
-        ];
-
-        // Create loading message placeholder
-        const assistantMessageId = uuidv4();
-        const loadingMessage = {
-          id: assistantMessageId,
-          chat_id: currentChatId,
-          role: "assistant" as const,
-          content: "",
-          type: "text",
-          created_at: new Date().toISOString(),
-          parent_message_id: userMessageId,
-          metadata: { loading: true },
-        };
-
-        // Add loading message
-        await addMessage(loadingMessage);
-        setStreamingMessageId(assistantMessageId);
-
-        // Call the streaming chat service
-        const streamingResponse = chatService.generateStreamingChatCompletion(
-          {
-            model: selectedModel,
-            messages: conversationHistory,
-            temperature: 0.7,
-            maxTokens: 4096,
-            stream: true,
-          },
-          apiKeysForService
-        );
-
-        let fullContent = "";
-        let finalMetadata = null;
-        let isFirstChunk = true;
-
-        for await (const chunk of streamingResponse) {
-          if (chunk.delta) {
-            fullContent += chunk.delta;
-
-            // On first chunk, remove loading state and start streaming
-            if (isFirstChunk) {
-              await updateMessage(assistantMessageId, {
-                content: fullContent,
-                metadata: { streaming: true },
-              });
-              isFirstChunk = false;
-            } else {
-              // Update the message with streaming content
-              await updateMessage(assistantMessageId, {
-                content: fullContent,
-                metadata: { streaming: true },
-              });
-            }
-          }
-
-          if (chunk.finished) {
-            finalMetadata = chunk.metadata;
-
-            // Final update to mark streaming as complete
-            await updateMessage(assistantMessageId, {
-              content: chunk.content,
-              metadata: finalMetadata
-                ? JSON.parse(JSON.stringify(finalMetadata))
-                : null,
-            });
-            break;
-          }
-        }
-
-        setStreamingMessageId(null);
-      } catch (err) {
-        console.error("Error in sendMessageToChat:", err);
-        const errorMessage =
-          err instanceof Error ? err.message : "Failed to send message";
-
-        // Create error message in chat
-        const errorMessageId = uuidv4();
-        const errorMessageObj = {
-          id: errorMessageId,
-          chat_id: currentChatId,
-          role: "assistant" as const,
-          content: errorMessage,
-          type: "error",
-          created_at: new Date().toISOString(),
-          parent_message_id: userMessageId,
-          metadata: {
-            error: errorMessage,
-            originalError: err instanceof Error ? err.stack : String(err),
-          },
-        };
-
-        // If we have a streaming message, update it with error, otherwise create new error message
-        if (streamingMessageId) {
-          try {
-            await updateMessage(streamingMessageId, {
-              content: errorMessage,
-              type: "error",
-              metadata: {
-                error: errorMessage,
-                originalError: err instanceof Error ? err.stack : String(err),
-              },
-            });
-          } catch (updateErr) {
-            console.error("Error updating message with error:", updateErr);
-            // If update fails, create a new error message
-            await addMessage(errorMessageObj);
-          }
-          setStreamingMessageId(null);
-        } else {
-          await addMessage(errorMessageObj);
-        }
-        throw err; // Re-throw to be handled by the calling function
-      }
-    },
-    [
-      addMessage,
-      updateMessage,
-      apiKeys,
-      messages,
-      selectedModel,
-      setStreamingMessageId,
-      streamingMessageId,
-    ]
-  );
 
   const handleKeyPress = useCallback(
     (e: React.KeyboardEvent) => {
