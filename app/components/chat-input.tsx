@@ -194,16 +194,16 @@ export default function ChatInput({
         </div>
       )}
 
-      <div className="chat-input-area flex flex-col items-center pt-2 px-2 justify-center w-1/2 rounded-t-xl">
+      <div className="chat-input-area flex flex-col items-center pt-2 px-2 justify-center w-3/4 max-w-4xl rounded-t-xl">
         <div className="chat-input-area flex flex-col w-full py-2 px-2 rounded-t-lg gap-2">
-          <div className="flex flex-row items-center justify-center w-full gap-2">
+          <div className="flex flex-row items-center justify-center w-full">
             <Textarea
               ref={textareaRef}
               onChange={handleInputChange}
               onKeyPress={handleKeyPress}
               placeholder={placeholder}
               disabled={disabled || isLoading}
-              className="scrollbar-hide resize-none min-h-[2.5rem] max-h-52 py-2 px-3 text-sm md:text-base focus:ring-0 focus:outline-none focus-visible:ring-0 focus-visible:border-border"
+              className="scrollbar-hide resize-none min-h-[2.5rem] max-h-52 py-2 px-3 text-sm md:text-base focus:ring-0 focus:outline-none focus-visible:ring-0 focus-visible:border-0"
             />
           </div>
 

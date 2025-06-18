@@ -194,6 +194,325 @@ export default function SettingsCategory() {
             </Card>
             <Card>
               <CardHeader>
+                <CardTitle>Context Management</CardTitle>
+                <CardDescription>
+                  Configure how conversation history is sent to AI models to
+                  optimize performance and token usage
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div>
+                  <Label>Context Management Method</Label>
+                  <Select
+                    value={preferences.context_management_method || "full"}
+                    onValueChange={(value) =>
+                      handlePreferenceChange({
+                        context_management_method: value as
+                          | "full"
+                          | "recent_messages"
+                          | "model_summary"
+                          | "smart_summary",
+                      })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select context method" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="full">
+                        <div className="flex flex-col">
+                          <span className="font-medium">Full Conversation</span>
+                          <span className="text-xs text-muted-foreground">
+                            Send entire conversation history (current behavior)
+                          </span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="recent_messages">
+                        <div className="flex flex-col">
+                          <span className="font-medium">Recent Messages</span>
+                          <span className="text-xs text-muted-foreground">
+                            Send first message + recent messages only
+                          </span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="model_summary">
+                        <div className="flex flex-col">
+                          <span className="font-medium">Model Summary</span>
+                          <span className="text-xs text-muted-foreground">
+                            Use AI to summarize conversation history
+                          </span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="smart_summary">
+                        <div className="flex flex-col">
+                          <span className="font-medium">Smart Summary</span>
+                          <span className="text-xs text-muted-foreground">
+                            First message + recent messages + AI summary
+                          </span>
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Recent Messages Settings */}
+                {preferences.context_management_method ===
+                  "recent_messages" && (
+                  <div className="space-y-2">
+                    <Label>Number of Recent Messages</Label>
+                    <Select
+                      value={String(
+                        preferences.context_recent_messages_count || 10
+                      )}
+                      onValueChange={(value) =>
+                        handlePreferenceChange({
+                          context_recent_messages_count: parseInt(value),
+                        })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="5">5 messages</SelectItem>
+                        <SelectItem value="10">10 messages</SelectItem>
+                        <SelectItem value="15">15 messages</SelectItem>
+                        <SelectItem value="20">20 messages</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Includes the first message plus this many recent messages
+                    </p>
+                  </div>
+                )}
+
+                {/* Model Summary Settings */}
+                {preferences.context_management_method === "model_summary" && (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>Summary Model</Label>
+                      <Select
+                        value={
+                          preferences.context_summary_model ||
+                          "gemini-2.5-flash-preview-05-20"
+                        }
+                        onValueChange={(value) =>
+                          handlePreferenceChange({
+                            context_summary_model: value,
+                          })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="gemini-2.5-flash-preview-05-20">
+                            <div className="flex flex-col">
+                              <span className="font-medium">
+                                Gemini 2.5 Flash
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                Recommended - Fast and cost-effective
+                              </span>
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="gemini-1.5-flash">
+                            <div className="flex flex-col">
+                              <span className="font-medium">
+                                Gemini 1.5 Flash
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                Fast and reliable
+                              </span>
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="gpt-4o-mini">
+                            <div className="flex flex-col">
+                              <span className="font-medium">GPT-4o Mini</span>
+                              <span className="text-xs text-muted-foreground">
+                                OpenAI's efficient model
+                              </span>
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="claude-3-5-haiku-latest">
+                            <div className="flex flex-col">
+                              <span className="font-medium">
+                                Claude 3.5 Haiku
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                Anthropic's fast model
+                              </span>
+                            </div>
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        This model will be used to create conversation summaries
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Smart Summary Settings */}
+                {preferences.context_management_method === "smart_summary" && (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>Number of Recent Messages</Label>
+                      <Select
+                        value={String(
+                          preferences.context_smart_summary_recent_count || 3
+                        )}
+                        onValueChange={(value) =>
+                          handlePreferenceChange({
+                            context_smart_summary_recent_count: parseInt(value),
+                          })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="2">2 messages</SelectItem>
+                          <SelectItem value="3">3 messages</SelectItem>
+                          <SelectItem value="4">4 messages</SelectItem>
+                          <SelectItem value="5">5 messages</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Number of most recent messages to include alongside the
+                        summary
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Summary Model</Label>
+                      <Select
+                        value={
+                          preferences.context_summary_model ||
+                          "gemini-2.5-flash-preview-05-20"
+                        }
+                        onValueChange={(value) =>
+                          handlePreferenceChange({
+                            context_summary_model: value,
+                          })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="gemini-2.5-flash-preview-05-20">
+                            <div className="flex flex-col">
+                              <span className="font-medium">
+                                Gemini 2.5 Flash
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                Recommended - Fast and cost-effective
+                              </span>
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="gemini-1.5-flash">
+                            <div className="flex flex-col">
+                              <span className="font-medium">
+                                Gemini 1.5 Flash
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                Fast and reliable
+                              </span>
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="gpt-4o-mini">
+                            <div className="flex flex-col">
+                              <span className="font-medium">GPT-4o Mini</span>
+                              <span className="text-xs text-muted-foreground">
+                                OpenAI's efficient model
+                              </span>
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="claude-3-5-haiku-latest">
+                            <div className="flex flex-col">
+                              <span className="font-medium">
+                                Claude 3.5 Haiku
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                Anthropic's fast model
+                              </span>
+                            </div>
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <Switch
+                        id="auto-update-summary"
+                        checked={
+                          preferences.context_summary_auto_update ?? true
+                        }
+                        onCheckedChange={(checked) =>
+                          handlePreferenceChange({
+                            context_summary_auto_update: checked,
+                          })
+                        }
+                      />
+                      <Label htmlFor="auto-update-summary" className="text-sm">
+                        Auto-update summary in background
+                      </Label>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Automatically update the conversation summary after each
+                      AI response
+                    </p>
+                  </div>
+                )}
+
+                {/* Information box */}
+                <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                  <div className="flex items-start space-x-3">
+                    <div className="flex-shrink-0">
+                      <svg
+                        className="h-5 w-5 text-blue-400"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                        Context Management Benefits
+                      </h4>
+                      <div className="mt-2 text-sm text-blue-700 dark:text-blue-200">
+                        <ul className="list-disc pl-5 space-y-1">
+                          <li>
+                            <strong>Full Conversation:</strong> Complete context
+                            but higher token costs
+                          </li>
+                          <li>
+                            <strong>Recent Messages:</strong> Lower costs,
+                            maintains recent context
+                          </li>
+                          <li>
+                            <strong>Model Summary:</strong> AI-generated
+                            summaries for long conversations
+                          </li>
+                          <li>
+                            <strong>Smart Summary:</strong> Best of both worlds
+                            - summaries + recent context
+                          </li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
                 <CardTitle>Visual Customization</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">

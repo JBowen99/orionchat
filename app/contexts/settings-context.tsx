@@ -29,6 +29,16 @@ export interface UserPreferences {
   default_model?: string;
   temperature?: number;
   max_tokens?: number;
+  // Context management settings
+  context_management_method?:
+    | "full"
+    | "recent_messages"
+    | "model_summary"
+    | "smart_summary";
+  context_recent_messages_count?: number;
+  context_summary_model?: string;
+  context_summary_auto_update?: boolean;
+  context_smart_summary_recent_count?: number;
 }
 
 type UserProfile = Tables<"user_profiles">;
