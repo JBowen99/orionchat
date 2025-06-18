@@ -1,6 +1,7 @@
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Textarea } from "~/components/ui/textarea";
+import { ScrollArea } from "~/components/ui/scroll-area";
 import {
   Tooltip,
   TooltipTrigger,
@@ -343,30 +344,23 @@ export function ChatBubbleUser({ message }: ChatBubbleUserProps) {
                             <span>{provider.label}</span>
                           </DropdownMenuSubTrigger>
                           <DropdownMenuSubContent>
-                            {provider.models.slice(0, 5).map((model) => (
-                              <DropdownMenuItem
-                                key={model.id}
-                                onClick={() => handleRetryWithModel(model.id)}
-                              >
-                                <div className="flex flex-col">
-                                  <span className="text-sm">{model.name}</span>
-                                  <span className="text-xs text-muted-foreground">
-                                    {model.description}
-                                  </span>
-                                </div>
-                              </DropdownMenuItem>
-                            ))}
-                            {provider.models.length > 5 && (
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  handleRetryWithModel(provider.models[0].id)
-                                }
-                              >
-                                <span className="text-xs text-muted-foreground">
-                                  +{provider.models.length - 5} more models...
-                                </span>
-                              </DropdownMenuItem>
-                            )}
+                            <ScrollArea className="h-48">
+                              {provider.models.map((model) => (
+                                <DropdownMenuItem
+                                  key={model.id}
+                                  onClick={() => handleRetryWithModel(model.id)}
+                                >
+                                  <div className="flex flex-col">
+                                    <span className="text-sm">
+                                      {model.name}
+                                    </span>
+                                    <span className="text-xs text-muted-foreground">
+                                      {model.description}
+                                    </span>
+                                  </div>
+                                </DropdownMenuItem>
+                              ))}
+                            </ScrollArea>
                           </DropdownMenuSubContent>
                         </DropdownMenuSub>
                       ))}
