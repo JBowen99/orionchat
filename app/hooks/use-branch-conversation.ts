@@ -100,11 +100,14 @@ export function useBranchConversation(options: UseBranchConversationOptions = {}
 
         // === BRANCH LOGIC: Copy messages to the new chat ===
         const newMessages: Message[] = messagesToCopy.map((msg, index) => ({
-          ...msg,
           id: uuidv4(), // Generate new ID
           chat_id: newChat.id,
-          parent_message_id: index > 0 ? null : null, // Reset parent relationships for simplicity
-          created_at: new Date(Date.now() + index).toISOString(), // Ensure proper ordering
+          content: msg.content,
+          role: msg.role,
+          type: msg.type || 'text',
+          metadata: msg.metadata,
+          parent_message_id: null, // Reset parent relationships for simplicity
+          created_at: new Date(Date.now() + index * 1000).toISOString(), // Ensure proper ordering with 1 second intervals
         }));
 
         // === BRANCH LOGIC: Insert messages into the new chat ===
@@ -113,10 +116,24 @@ export function useBranchConversation(options: UseBranchConversationOptions = {}
           .insert(newMessages);
 
         if (messagesError) {
-          console.error("Error copying messages:", messagesError);
+          console.error("Error copying messages:", {
+            error: messagesError,
+            code: messagesError.code,
+            message: messagesError.message,
+            details: messagesError.details,
+            hint: messagesError.hint,
+            newMessages: newMessages.map(m => ({
+              id: m.id,
+              chat_id: m.chat_id,
+              role: m.role,
+              type: m.type,
+              contentLength: m.content?.length || 0,
+              hasMetadata: !!m.metadata
+            }))
+          });
           // Clean up the created chat if message copying fails
           await supabase.from("chats").delete().eq("id", newChat.id);
-          throw new Error("Failed to copy messages to new chat");
+          throw new Error(`Failed to copy messages to new chat: ${messagesError.message || messagesError.code || 'Unknown error'}`);
         }
 
         // === BRANCH LOGIC: Cache the new messages in Dexie ===
